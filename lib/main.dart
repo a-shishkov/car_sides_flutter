@@ -238,7 +238,7 @@ class _MyHomePageState extends State<MyHomePage> {
           className: "MyHomePage",
           methodName: "getImage",
           text: "image resolution: ${_imageFile!.resolution}");
-
+      await save(File(_imageFile!.path!), CarSides(CarSides.sides[4]), CarSides(CarSides.sides[3]));
       if (_imageFile!.width < _imageFile!.height) {
         FLog.info(
             className: "MyHomePage",
@@ -254,13 +254,12 @@ class _MyHomePageState extends State<MyHomePage> {
         await _imageFile!.crop((_imageFile!.width - _imageFile!.height) ~/ 2, 0,
             _imageFile!.height, _imageFile!.height);
       }
-
       FLog.info(
           className: "MyHomePage",
           methodName: "getImage",
           text: "croppedImage resolution: ${_imageFile!.resolution}");
 
-      await _imageFile!.resize(240, 240);
+      await _imageFile!.resize(256, 256);
 
       _predictedSideList = await predict(_imageFile!.file!);
       _predictedSide = _predictedSideList![0];
@@ -745,10 +744,11 @@ class _LogPageState extends State<LogPage> {
                   return ListView.builder(
                       itemCount: snapshot.data!.length,
                       itemBuilder: (BuildContext context, int index) {
+                        var log = snapshot.data![snapshot.data!.length - index - 1];
                         return Padding(
                           padding: const EdgeInsets.all(5.0),
                           child: Text(
-                            "${snapshot.data![index].logLevel} ${snapshot.data![index].className} ${snapshot.data![index].methodName} ${snapshot.data![index].text!} ${snapshot.data![index].timestamp}",
+                            "${log.logLevel} ${log.className} ${log.methodName} ${log.text!} ${log.timestamp}",
                             style: TextStyle(fontSize: 18),
                           ),
                         );
