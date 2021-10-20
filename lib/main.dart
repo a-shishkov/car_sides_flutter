@@ -2,7 +2,7 @@ import 'dart:io';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/widgets.dart';
-import 'package:sides/sides.dart';
+import 'package:flutter_app/predict.dart';
 import 'package:f_logs/f_logs.dart';
 // import 'package:path_provider/path_provider.dart';
 // import 'package:flutter/services.dart' show rootBundle;
