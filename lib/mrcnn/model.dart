@@ -144,7 +144,7 @@ class MaskRCNN {
 
     interpreter.runForMultipleInputs(inputs, outputs);
 
-    interpreter.close();
+    // interpreter.close();
 
     List detectionsList = detections.getDoubleList().reshape(outputShapes[3]);
     List mrcnnMaskList = mrcnnMask.getDoubleList().reshape(outputShapes[4]);
