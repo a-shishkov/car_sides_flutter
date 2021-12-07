@@ -1,22 +1,26 @@
 import 'dart:io';
 import 'dart:async';
+import 'dart:isolate';
 import 'package:flutter/material.dart';
 import 'package:flutter/widgets.dart';
-import 'package:flutter_app/predict.dart';
 import 'package:f_logs/f_logs.dart';
-// import 'package:path_provider/path_provider.dart';
-// import 'package:flutter/services.dart' show rootBundle;
+import 'package:flutter_app/utils/image_extender.dart';
+import 'package:flutter_app/utils/isolate_utils.dart';
 import 'package:image/image.dart' as ImagePackage;
 import 'package:camera/camera.dart';
 import 'package:loader_overlay/loader_overlay.dart';
-//All functions are in sides.dart -> packages/sides/lib/sides.dart
+import 'package:tflite_flutter/tflite_flutter.dart' as tfl;
+import 'package:path_provider/path_provider.dart';
+import 'package:intl/intl.dart';
 
 List<CameraDescription> cameras = [];
+late tfl.Interpreter interpreter;
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   cameras = await availableCameras();
-  // FLog.printLogs();
+  interpreter = await tfl.Interpreter.fromAsset('car_parts.tflite');
+
   runApp(MyApp());
 }
 
@@ -56,9 +60,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     keepPage: true,
   );
 
-  @override
-  void initState() {
-    super.initState();
+  void initializeCameraController() {
     controller = CameraController(
       cameras[0],
       ResolutionPreset.high,
@@ -70,6 +72,12 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
       }
       setState(() {});
     });
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    initializeCameraController();
     WidgetsBinding.instance!.addObserver(this);
   }
 
@@ -97,19 +105,12 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     if (state == AppLifecycleState.inactive) {
       cameraController.dispose();
     } else if (state == AppLifecycleState.resumed) {
-      controller = CameraController(
-        cameras[0],
-        ResolutionPreset.high,
-        enableAudio: false,
-      );
-      controller.initialize().then((_) {
-        if (!mounted) {
-          return;
-        }
-        setState(() {});
-      });
+      initializeCameraController();
     }
   }
+
+
+
 
   Future getImage() async {
     if (!controller.value.isInitialized || getImageRunning) {
@@ -118,10 +119,27 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     getImageRunning = true;
     XFile file = await controller.takePicture();
     ImagePackage.Image image =
-        ImagePackage.decodeImage(File(file.path).readAsBytesSync())!;
+    ImagePackage.decodeImage(File(file.path).readAsBytesSync())!;
+
+    // ImageExtender img = ImageExtender.decodeImage(File(file.path).readAsBytesSync());
     image = ImagePackage.copyRotate(image, 90);
     context.loaderOverlay.show();
-    filename = await predict(image);
+
+    ReceivePort receivePort = ReceivePort();
+    await Isolate.spawn(predictIsolate, receivePort.sendPort);
+
+    SendPort sendPort = await receivePort.first;
+    var img = await sendReceive(sendPort, IsolateMsg(image, interpreter.address));
+
+    Directory appCacheDirectory = await getTemporaryDirectory();
+    String appCachesPath = appCacheDirectory.path;
+    var now = DateTime.now();
+    var formatter = DateFormat('yyyyMMdd_HH_mm_ss');
+    String currentTimeStamp = formatter.format(now);
+    filename = '$appCachesPath/$currentTimeStamp.png';
+    await File(filename!).writeAsBytes(ImagePackage.encodePng(img));
+
+
     context.loaderOverlay.hide();
     if (filename != null)
       setState(() {
@@ -228,5 +246,4 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
             ? CameraPreview(controller)
             : Container());
   }
-
 }
