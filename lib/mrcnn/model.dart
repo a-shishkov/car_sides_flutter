@@ -1,4 +1,5 @@
 import 'package:flutter_app/mrcnn/utils.dart';
+import 'package:flutter_app/utils/image_extender.dart';
 import 'package:tflite_flutter/tflite_flutter.dart';
 import 'package:tflite_flutter_helper/tflite_flutter_helper.dart';
 import 'config.dart';
@@ -7,7 +8,7 @@ import 'package:collection/collection.dart';
 //  Utility Functions
 List computeBackboneShapes(List imageShape, List<int> backboneStrides) {
   var output = [];
-  for (int value in backboneStrides)
+  for (var value in backboneStrides)
     output
         .add([(imageShape[0] / value).ceil(), (imageShape[1] / value).ceil()]);
 
@@ -17,31 +18,31 @@ List computeBackboneShapes(List imageShape, List<int> backboneStrides) {
 class MaskRCNN {
   Interpreter interpreter;
 
+  late TensorBufferFloat detections;
+  late TensorBufferFloat mrcnnMask;
+
   MaskRCNN(this.interpreter);
 
   MaskRCNN.fromAddress(int address)
       : interpreter = Interpreter.fromAddress(address);
 
-  moldInputs(image) {
-    var resizeOutput = resizeImage(image,
+  Future<Map<String, List>> moldInputs(ImageExtender image) async {
+    var resize = await resizeImage(image,
         minDim: CarPartsConfig.IMAGE_MIN_DIM,
         maxDim: CarPartsConfig.IMAGE_MAX_DIM,
         minScale: CarPartsConfig.IMAGE_MIN_SCALE,
         mode: CarPartsConfig.IMAGE_RESIZE_MODE);
-    List moldedImage = resizeOutput[0];
-    var window = resizeOutput[1];
-    var scale = resizeOutput[2];
-    // var padding = resizeOutput[3];
-    // var crop = resizeOutput[4];
-    moldedImage = moldImage(moldedImage);
-    var zerosList = List.filled(CarPartsConfig.NUM_CLASSES, 0);
+
+    List moldedImage = moldImage((resize["image"] as ImageExtender).imageList);
+
     var imageMeta = composeImageMeta(0, [image.height, image.width, 3],
-        moldedImage.shape, window, scale, zerosList);
-    return [
-      [moldedImage],
-      [imageMeta],
-      [window]
-    ];
+        moldedImage.shape, resize["window"], resize["scale"]);
+
+    return {
+      "molded_images": [moldedImage],
+      "image_metas": [imageMeta],
+      "windows": [resize["window"]]
+    };
   }
 
   List unmoldDetections(
@@ -54,21 +55,21 @@ class MaskRCNN {
       }
     }
     var boxes = [];
-    var classIds = [];
+    var classIDs = [];
     var scores = [];
     List masks = [];
 
-    if (N == 0) return [boxes, classIds, scores, masks];
+    if (N == 0) return [boxes, classIDs, scores, masks];
 
     for (var i = 0; i < N; i++) {
       boxes.add(List.generate(4, (j) => detections[i][j]));
-      classIds.add(detections[i][4].toInt());
+      classIDs.add(detections[i][4].toInt());
       scores.add(detections[i][5]);
       var tempList = [];
       for (var j = 0; j < mrcnnMask[i].length; j++) {
         var tempList2 = [];
         for (var k = 0; k < mrcnnMask[i][j].length; k++) {
-          tempList2.add(mrcnnMask[i][j][k][classIds[i]]);
+          tempList2.add(mrcnnMask[i][j][k][classIDs[i]]);
         }
         tempList.add(tempList2);
       }
@@ -111,64 +112,50 @@ class MaskRCNN {
       var fullMask = unmoldMask(masks[i], boxes[i], originalImageShape);
       fullMasks.add(fullMask);
     }
-    return [boxes, classIds, scores, fullMasks];
+    return [boxes, classIDs, scores, fullMasks];
   }
 
-  detect(image) async {
-    // TODO: map
-    var moldOutput = moldInputs(image);
-    List moldedImages = moldOutput[0];
-    List imageMetas = moldOutput[1];
-    List windows = moldOutput[2];
+  detect(ImageExtender image) async {
+    var mold = await moldInputs(ImageExtender.from(image));
 
-    var anchors = [await getAnchors(moldedImages.shape.sublist(1))];
+    var anchors = [await getAnchors(mold["molded_images"]!.shape.sublist(1))];
 
-    var inputs = [moldedImages, imageMetas, anchors];
-    var outputTensors = interpreter.getOutputTensors();
-    var outputShapes = [];
-    outputTensors.forEach((tensor) {
-      outputShapes.add(tensor.shape);
-    });
+    var inputs = [mold["molded_images"]!, mold["image_metas"]!, anchors];
+    var outputTensors = getOutputTensors();
 
-    var detections = TensorBufferFloat(outputShapes[3]);
-    var mrcnnMask = TensorBufferFloat(outputShapes[4]);
-    var outputs = <int, Object>{};
-    for (var i = 0; i < outputTensors.length; i++) {
-      if (i == 3)
-        outputs[i] = detections.buffer;
-      else if (i == 4)
-        outputs[i] = mrcnnMask.buffer;
-      else
-        outputs[i] = TensorBufferFloat(outputShapes[i]).buffer;
-    }
+    var outputShapes = outputTensors["output_shapes"];
+    var outputs = outputTensors["outputs"];
 
     interpreter.runForMultipleInputs(inputs, outputs);
 
-    // interpreter.close();
-
     List detectionsList = detections.getDoubleList().reshape(outputShapes[3]);
     List mrcnnMaskList = mrcnnMask.getDoubleList().reshape(outputShapes[4]);
-    var unmoldOutput = unmoldDetections(detectionsList[0], mrcnnMaskList[0],
-        imageTo3DList(image).shape, moldedImages.shape.sublist(1), windows[0]);
+
+    var unmold = unmoldDetections(
+        detectionsList[0],
+        mrcnnMaskList[0],
+        image.imageList.shape,
+        mold["molded_images"]!.shape.sublist(1),
+        mold["windows"]![0]);
 
     var result = {
-      "rois": unmoldOutput[0],
-      "class_ids": unmoldOutput[1],
-      "scores": unmoldOutput[2],
-      "masks": unmoldOutput[3]
+      "rois": unmold[0],
+      "class_ids": unmold[1],
+      "scores": unmold[2],
+      "masks": unmold[3]
     };
     return result;
   }
 
-  getOuputTensors() {
+  getOutputTensors() {
     var outputTensors = interpreter.getOutputTensors();
     var outputShapes = [];
     outputTensors.forEach((tensor) {
       outputShapes.add(tensor.shape);
     });
 
-    var detections = TensorBufferFloat(outputShapes[3]);
-    var mrcnnMask = TensorBufferFloat(outputShapes[4]);
+    detections = TensorBufferFloat(outputShapes[3]);
+    mrcnnMask = TensorBufferFloat(outputShapes[4]);
     var outputs = <int, Object>{};
     for (var i = 0; i < outputTensors.length; i++) {
       if (i == 3)
@@ -178,7 +165,8 @@ class MaskRCNN {
       else
         outputs[i] = TensorBufferFloat(outputShapes[i]).buffer;
     }
-    return [detections, mrcnnMask, outputShapes, outputs];
+
+    return {"output_shapes": outputShapes, "outputs": outputs};
   }
 
   Future<List> getAnchors(List imageShape) async {
@@ -195,6 +183,7 @@ class MaskRCNN {
     // TODO: cache anchors
     var backboneShapes =
         computeBackboneShapes(imageShape, CarPartsConfig.BACKBONE_STRIDES);
+
     var anchors = generatePyramidAnchors(
         CarPartsConfig.RPN_ANCHOR_SCALES,
         CarPartsConfig.RPN_ANCHOR_RATIOS,
@@ -203,12 +192,17 @@ class MaskRCNN {
         CarPartsConfig.RPN_ANCHOR_STRIDE);
     anchors = normBoxes(anchors, [imageShape[0], imageShape[1]]);
     // await File(filename).writeAsString(jsonEncode(anchors));
+
     return anchors;
   }
 }
 
-List composeImageMeta(
-    imageId, originalImageShape, imageShape, window, scale, activeClassIds) {
+List composeImageMeta(imageId, originalImageShape, imageShape, window, scale,
+    [activeClassIds]) {
+  if (activeClassIds == null) {
+    activeClassIds = List.filled(CarPartsConfig.NUM_CLASSES, 0);
+  }
+
   var meta = [imageId] +
       originalImageShape +
       imageShape +
@@ -216,6 +210,7 @@ List composeImageMeta(
       [scale] +
       activeClassIds;
   meta = List.generate(meta.length, (i) => meta[i].toDouble());
+
   return meta;
 }
 

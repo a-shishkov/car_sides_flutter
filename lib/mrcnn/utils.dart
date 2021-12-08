@@ -1,4 +1,5 @@
 import 'dart:math';
+import 'package:flutter_app/utils/image_extender.dart';
 import 'package:tflite_flutter/tflite_flutter.dart';
 import 'package:tflite_flutter_helper/tflite_flutter_helper.dart';
 import 'package:image/image.dart';
@@ -10,10 +11,10 @@ List imageTo3DList(Image image) {
   return rgbImage;
 }
 
-List resizeImage(Image image, {minDim, maxDim, minScale, mode = "square"}) {
+Future<Map> resizeImage(ImageExtender image,
+    {minDim, maxDim, minScale, mode = "square"}) async {
   var h = image.height;
   var w = image.width;
-  List imageList = imageTo3DList(image);
 
   var window = [0, 0, h, w];
   var scale = 1.0;
@@ -24,9 +25,56 @@ List resizeImage(Image image, {minDim, maxDim, minScale, mode = "square"}) {
   ];
   var crop;
 
-  if (mode == "none") return [image, window, scale, padding, crop];
+  if (mode == "none")
+    return {
+      "image": image,
+      "window": window,
+      "scale": scale,
+      "padding": padding,
+      "crop": crop
+    };
 
-  // Scale?
+  if (minDim != null)
+    // Scale up but not down
+    scale = max(1, minDim / min(h, w));
+  if (minScale != null && scale < minScale) scale = minScale;
+  // Does it exceed max dim?
+  var imageMax;
+
+  if (maxDim != null && mode == "square") {
+    imageMax = max(h, w);
+    if ((imageMax * scale) > maxDim) scale = maxDim / imageMax;
+  }
+
+  if (mode == "square") {
+    assert(max(h, w) == h);
+
+    var ratio = h / maxDim;
+    int newWidth = w ~/ ratio;
+
+    int dstX = (maxDim - newWidth) ~/ 2;
+
+    image.image = drawImage(
+        Image(maxDim, maxDim, channels: Channels.rgb), image.image,
+        dstX: dstX, dstW: newWidth);
+
+    h = image.height;
+    w = newWidth;
+
+    int topPad = (maxDim - h) ~/ 2;
+    var bottomPad = maxDim - h - topPad;
+    int leftPad = (maxDim - w) ~/ 2;
+    var rightPad = maxDim - w - leftPad;
+    padding = [
+      [topPad, bottomPad],
+      [leftPad, rightPad],
+      [0, 0]
+    ];
+
+    window = [topPad, leftPad, h + topPad, w + leftPad];
+  }
+
+/*  // Scale?
   if (minDim != null)
     // Scale up but not down
     scale = max(1, minDim / min(h, w));
@@ -40,13 +88,16 @@ List resizeImage(Image image, {minDim, maxDim, minScale, mode = "square"}) {
   }
   if (scale != 1) {
     if (imageMax == h) {
-      image = copyResize(image, width: minDim);
+      image.image = copyResize(image.image, height: minDim);
+      // await image.save(image.path);
+      // image = ImageExtender.from(copyResize(image.image, height: minDim));
     } else {
-      image = copyResize(image, height: minDim);
+      image = ImageExtender.fromImage(copyResize(image.image, width: minDim));
     }
-    image = copyRotate(image, -90);
+    // image = ImageExtender.from(copyRotate(image.image, -90));
   }
 
+  late List imageList;
   if (mode == "square") {
     var h = image.height;
     var w = image.width;
@@ -59,16 +110,22 @@ List resizeImage(Image image, {minDim, maxDim, minScale, mode = "square"}) {
       [leftPad, rightPad],
       [0, 0]
     ];
-    imageList = imageTo3DList(image);
-    imageList = addPadding(imageList, padding);
-    window = [topPad, leftPad, h + topPad, w + leftPad];
+    imageList = image.addPadding(padding);
+
+    `window = [topPad, leftPad, h + topPad, w + leftPad];`
   }
   imageList = imageList.flatten();
   imageList = List.generate(imageList.length, (i) => imageList[i].toDouble());
-  imageList = imageList.reshape([maxDim, maxDim, 3]);
-  return [imageList, window, scale, padding, crop];
-}
+  imageList = imageList.reshape([maxDim, maxDim, 3]);*/
 
+  return {
+    "image": image,
+    "window": window,
+    "scale": scale,
+    "padding": padding,
+    "crop": crop
+  };
+}
 
 List unmoldMask(List mask, bbox, imageShape) {
   var threshold = 0.5;
@@ -78,13 +135,12 @@ List unmoldMask(List mask, bbox, imageShape) {
   int x2 = bbox[3];
   var boolMask = List.generate(
       mask.shape[0],
-          (i) => List.generate(mask.shape[1],
-              (j) => mask[i][j] >= threshold ? [255, 255, 255] : [0, 0, 0]));
+      (i) => List.generate(mask.shape[1],
+          (j) => mask[i][j] >= threshold ? [255, 255, 255] : [0, 0, 0]));
   var maskImage = Image.fromBytes(
       mask.shape[0], mask.shape[1], boolMask.flatten(),
       format: Format.rgb);
-  maskImage =
-      copyResize(maskImage, width: x2 - x1, height: y2 - y1);
+  maskImage = copyResize(maskImage, width: x2 - x1, height: y2 - y1);
   mask = imageTo3DList(maskImage);
   var binaryMask = [];
   Function eq = const ListEquality().equals;
@@ -99,9 +155,9 @@ List unmoldMask(List mask, bbox, imageShape) {
   binaryMask = binaryMask.reshape([mask.shape[0], mask.shape[1]]);
   var fullMask = List.generate(
       imageShape[0],
-          (i) => List.generate(
+      (i) => List.generate(
           imageShape[1],
-              (j) => (i >= y1 && i < y2 && j >= x1 && j < x2)
+          (j) => (i >= y1 && i < y2 && j >= x1 && j < x2)
               ? binaryMask[i - y1][j - x1]
               : false));
 
@@ -114,7 +170,7 @@ List generateAnchors(scales, ratios, shape, featureStride, int anchorStride) {
   scales = List.generate(ratios.length, (index) => scales);
 
   var heights =
-  List.generate(ratios.length, (i) => scales[i] / sqrt(ratios[i]));
+      List.generate(ratios.length, (i) => scales[i] / sqrt(ratios[i]));
   var widths = List.generate(ratios.length, (i) => scales[i] * sqrt(ratios[i]));
   var shiftsY = [];
   for (var i = 0; i < shape[0]; i += anchorStride) {
@@ -193,9 +249,9 @@ List meshGrid(List x, List y) {
   var flattenX = x.flatten();
   var flattenY = y.flatten();
   var outputX = List.generate(flattenY.length,
-          (i) => List.generate(flattenX.length, (j) => flattenX[j]));
+      (i) => List.generate(flattenX.length, (j) => flattenX[j]));
   var outputY = List.generate(flattenY.length,
-          (i) => List.generate(flattenX.length, (j) => flattenY[i]));
+      (i) => List.generate(flattenX.length, (j) => flattenY[i]));
   return [outputX, outputY];
 }
 

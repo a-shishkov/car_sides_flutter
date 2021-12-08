@@ -4,6 +4,7 @@ import 'dart:isolate';
 import 'package:flutter/material.dart';
 import 'package:flutter/widgets.dart';
 import 'package:f_logs/f_logs.dart';
+import 'package:flutter_app/mrcnn/utils.dart';
 import 'package:flutter_app/utils/image_extender.dart';
 import 'package:flutter_app/utils/isolate_utils.dart';
 import 'package:image/image.dart' as ImagePackage;
@@ -52,6 +53,7 @@ class MyHomePage extends StatefulWidget {
 class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   late CameraController controller;
   String? filename;
+  Image? originalImage;
   bool getImageRunning = false;
 
   int _selectedIndex = 0;
@@ -91,7 +93,6 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     final CameraController? cameraController = controller;
-
     // App state changed before we got the chance to initialize.
     if (cameraController == null || !cameraController.value.isInitialized) {
       return;
@@ -109,48 +110,103 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     }
   }
 
+  Future<String> saveData(data, filename, {tempDir = true}) async {
+    if (tempDir) {
+      Directory appCacheDirectory = await getTemporaryDirectory();
+      String appCachesPath = appCacheDirectory.path;
 
+      filename = '$appCachesPath/$filename';
+      await File(filename).writeAsBytes(data);
+      return filename;
+    }
+    return "";
+  }
 
+  rotate(List img, {angle = 90}) {
+    assert(angle == 90 || angle == -90 || angle == 180);
+
+    int newH, newW;
+    if (angle == 180) {
+      newH = img.shape[0];
+      newW = img.shape[1];
+    } else {
+      newW = img.shape[0];
+      newH = img.shape[1];
+    }
+
+    List output = List.generate(
+        newH, (e) => List.generate(newW, (e) => List.filled(3, 0)));
+
+    for (var i = 0; i < newH; i++) {
+      for (var j = 0; j < newW; j++) {
+        for (var k = 0; k < 3; k++) {
+          switch (angle) {
+            case -90:
+              output[newW - 1 - j][i][k] = img[i][j][k];
+              break;
+            case 90:
+              output[j][newH - 1 - i][k] = img[i][j][k];
+              break;
+            case 180:
+              output[newH - 1 - i][newW - 1 - j][k] = img[i][j][k];
+              break;
+          }
+        }
+      }
+    }
+
+    return output;
+  }
 
   Future getImage() async {
     if (!controller.value.isInitialized || getImageRunning) {
       return;
     }
     getImageRunning = true;
-    XFile file = await controller.takePicture();
-    ImagePackage.Image image =
-    ImagePackage.decodeImage(File(file.path).readAsBytesSync())!;
 
-    // ImageExtender img = ImageExtender.decodeImage(File(file.path).readAsBytesSync());
-    image = ImagePackage.copyRotate(image, 90);
+    XFile file = await controller.takePicture();
+
+    ImageExtender originalIE = ImageExtender.decodeImageFromPath(file.path);
+
+    // originalIE = ImageExtender.fromImage(ImagePackage.drawImage(
+    //     ImagePackage.Image(newW, newH, channels: ImagePackage.Channels.rgb), originalIE.image,
+    //     dstX: dstX, dstW: origSmallW));
+
+    // image.image = ImagePackage.drawImage(image.image, image2.image);
+    // image2.image;
+    // await originalIE.save(file.path);
+    // await image.rotate(180);
+
+    setState(() {
+      originalImage = Image.file(File(originalIE.path!));
+    });
+
     context.loaderOverlay.show();
 
     ReceivePort receivePort = ReceivePort();
     await Isolate.spawn(predictIsolate, receivePort.sendPort);
 
     SendPort sendPort = await receivePort.first;
-    var img = await sendReceive(sendPort, IsolateMsg(image, interpreter.address));
+    var result = await sendReceive(sendPort,
+        IsolateMsg(originalIE, interpreterAddress: interpreter.address));
 
-    Directory appCacheDirectory = await getTemporaryDirectory();
-    String appCachesPath = appCacheDirectory.path;
-    var now = DateTime.now();
-    var formatter = DateFormat('yyyyMMdd_HH_mm_ss');
-    String currentTimeStamp = formatter.format(now);
-    filename = '$appCachesPath/$currentTimeStamp.png';
-    await File(filename!).writeAsBytes(ImagePackage.encodePng(img));
+    if (result.foundInstances > 0) {
+      filename =
+          DateFormat('yyyyMMdd_HH_mm_ss').format(DateTime.now()) + '.png';
+      filename = await result.image.saveToTempDir(filename!);
 
-
-    context.loaderOverlay.hide();
-    if (filename != null)
       setState(() {
         _onItemTapped(1);
       });
-    else {
+    } else {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: const Text('No instances found'),
       ));
     }
-    getImageRunning = false;
+    setState(() {
+      getImageRunning = false;
+      context.loaderOverlay.hide();
+    });
   }
 
   @override
@@ -162,11 +218,25 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
       body: WillPopScope(
           onWillPop: () => Future.sync(onWillPop), child: buildPageView()),
       bottomNavigationBar: BottomNavigationBar(
-        items: buildBottomNavBarItems(),
+        items: [
+          BottomNavigationBarItem(
+            icon: Icon(Icons.camera),
+            label: 'Camera',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.image),
+            label: 'Image',
+          ),
+        ],
         currentIndex: _selectedIndex,
         onTap: _onItemTapped,
       ),
-      floatingActionButton: _buttonFAB(),
+      floatingActionButton: _selectedIndex == 0
+          ? FloatingActionButton(
+              onPressed: getImage,
+              tooltip: 'Pick Image',
+              child: Icon(Icons.add_a_photo))
+          : null,
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
     );
   }
@@ -176,8 +246,8 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
       return true;
     else {
       pageController.previousPage(
-        duration: Duration(milliseconds: 200),
-        curve: Curves.linear,
+        duration: Duration(milliseconds: 500),
+        curve: Curves.ease,
       );
       return false;
     }
@@ -197,29 +267,6 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     });
   }
 
-  List<BottomNavigationBarItem> buildBottomNavBarItems() {
-    return [
-      BottomNavigationBarItem(
-        icon: Icon(Icons.camera),
-        label: 'Camera',
-      ),
-      BottomNavigationBarItem(
-        icon: Icon(Icons.image),
-        label: 'Image',
-      ),
-    ];
-  }
-
-  _buttonFAB() {
-    if (_selectedIndex == 0)
-      return FloatingActionButton(
-          onPressed: getImage,
-          tooltip: 'Pick Image',
-          child: Icon(Icons.add_a_photo));
-    else
-      return null;
-  }
-
   Widget buildPageView() {
     return PageView(
       controller: pageController,
@@ -229,21 +276,23 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     );
   }
 
+  Widget cameraPage() {
+    return Container(
+        color: Colors.black,
+        child: !getImageRunning && controller.value.isInitialized
+            ? CameraPreview(controller)
+            : originalImage == null
+                ? Center(child: CircularProgressIndicator())
+                : originalImage);
+  }
+
   Widget mrcnnPage() {
     return Container(
         child: (filename == null
             ? Icon(
-          Icons.image_not_supported,
-          size: 100,
-        )
+                Icons.image_not_supported,
+                size: 100,
+              )
             : Image.file(File(filename!))));
-  }
-
-  Widget cameraPage() {
-    return Container(
-        color: Colors.black,
-        child: controller.value.isInitialized
-            ? CameraPreview(controller)
-            : Container());
   }
 }

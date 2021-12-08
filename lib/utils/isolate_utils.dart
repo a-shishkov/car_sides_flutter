@@ -3,13 +3,14 @@ import 'package:flutter_app/mrcnn/config.dart';
 import 'package:flutter_app/mrcnn/model.dart';
 import 'package:flutter_app/mrcnn/utils.dart';
 import 'package:flutter_app/mrcnn/visualize.dart';
-import 'package:image/image.dart';
+import 'package:flutter_app/utils/image_extender.dart';
 
 class IsolateMsg {
-  Image image;
-  int interpreterAddress;
+  ImageExtender image;
+  int? interpreterAddress;
+  int? foundInstances;
 
-  IsolateMsg(this.image, this.interpreterAddress);
+  IsolateMsg(this.image, {this.interpreterAddress, this.foundInstances});
 }
 
 Future<void> predictIsolate(SendPort sendPort) async {
@@ -21,16 +22,18 @@ Future<void> predictIsolate(SendPort sendPort) async {
     IsolateMsg data = msg[0];
     SendPort replyTo = msg[1];
 
-    Image? image = data.image;
+    ImageExtender image = data.image;
     var address = data.interpreterAddress;
 
-    var model = MaskRCNN.fromAddress(address);
+    var model = MaskRCNN.fromAddress(address!);
     var r = await model.detect(image);
 
-    image = await displayInstances(imageTo3DList(image), r["rois"], r["masks"],
-        r["class_ids"], CarPartsConfig.CLASS_NAMES);
+    if (r["class_ids"].length > 0) {
+      image.image = await displayInstances(image.imageList, r["rois"],
+          r["masks"], r["class_ids"], CarPartsConfig.CLASS_NAMES);
+    }
 
-    replyTo.send(image);
+    replyTo.send(IsolateMsg(image, foundInstances: r["class_ids"].length));
   }
 }
 
