@@ -4,22 +4,23 @@ import 'dart:isolate';
 import 'package:flutter/material.dart';
 import 'package:flutter/widgets.dart';
 import 'package:f_logs/f_logs.dart';
-import 'package:flutter_app/mrcnn/utils.dart';
 import 'package:flutter_app/utils/image_extender.dart';
 import 'package:flutter_app/utils/isolate_utils.dart';
-import 'package:image/image.dart' as ImagePackage;
 import 'package:camera/camera.dart';
 import 'package:loader_overlay/loader_overlay.dart';
 import 'package:tflite_flutter/tflite_flutter.dart' as tfl;
 import 'package:path_provider/path_provider.dart';
 import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 List<CameraDescription> cameras = [];
 late tfl.Interpreter interpreter;
+late SharedPreferences prefs;
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   cameras = await availableCameras();
+  prefs = await SharedPreferences.getInstance();
   interpreter = await tfl.Interpreter.fromAsset('car_parts.tflite');
 
   runApp(MyApp());
@@ -52,9 +53,12 @@ class MyHomePage extends StatefulWidget {
 
 class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   late CameraController controller;
-  String? filename;
-  Image? originalImage;
+
+  String? newImagePath;
+  String? originalImagePath;
+
   bool getImageRunning = false;
+  bool saveImagesToDownloadDir = false;
 
   int _selectedIndex = 0;
   PageController pageController = PageController(
@@ -76,9 +80,22 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     });
   }
 
+  _savePref(String name, bool value) async {
+    await prefs.setBool(name, value);
+  }
+
   @override
   void initState() {
     super.initState();
+    bool? boolValue = prefs.getBool('saveToDownloadDir');
+    print("boolValue $boolValue");
+    if (boolValue != null) {
+      saveImagesToDownloadDir = boolValue;
+    } else {
+      print("save boolValue");
+      _savePref('saveToDownloadDir', true);
+    }
+
     initializeCameraController();
     WidgetsBinding.instance!.addObserver(this);
   }
@@ -122,42 +139,6 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     return "";
   }
 
-  rotate(List img, {angle = 90}) {
-    assert(angle == 90 || angle == -90 || angle == 180);
-
-    int newH, newW;
-    if (angle == 180) {
-      newH = img.shape[0];
-      newW = img.shape[1];
-    } else {
-      newW = img.shape[0];
-      newH = img.shape[1];
-    }
-
-    List output = List.generate(
-        newH, (e) => List.generate(newW, (e) => List.filled(3, 0)));
-
-    for (var i = 0; i < newH; i++) {
-      for (var j = 0; j < newW; j++) {
-        for (var k = 0; k < 3; k++) {
-          switch (angle) {
-            case -90:
-              output[newW - 1 - j][i][k] = img[i][j][k];
-              break;
-            case 90:
-              output[j][newH - 1 - i][k] = img[i][j][k];
-              break;
-            case 180:
-              output[newH - 1 - i][newW - 1 - j][k] = img[i][j][k];
-              break;
-          }
-        }
-      }
-    }
-
-    return output;
-  }
-
   Future getImage() async {
     if (!controller.value.isInitialized || getImageRunning) {
       return;
@@ -168,17 +149,8 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
 
     ImageExtender originalIE = ImageExtender.decodeImageFromPath(file.path);
 
-    // originalIE = ImageExtender.fromImage(ImagePackage.drawImage(
-    //     ImagePackage.Image(newW, newH, channels: ImagePackage.Channels.rgb), originalIE.image,
-    //     dstX: dstX, dstW: origSmallW));
-
-    // image.image = ImagePackage.drawImage(image.image, image2.image);
-    // image2.image;
-    // await originalIE.save(file.path);
-    // await image.rotate(180);
-
     setState(() {
-      originalImage = Image.file(File(originalIE.path!));
+      originalImagePath = originalIE.path!;
     });
 
     context.loaderOverlay.show();
@@ -191,10 +163,15 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
         IsolateMsg(originalIE, interpreterAddress: interpreter.address));
 
     if (result.foundInstances > 0) {
-      filename =
+      var path =
           DateFormat('yyyyMMdd_HH_mm_ss').format(DateTime.now()) + '.png';
-      filename = await result.image.saveToTempDir(filename!);
-
+      newImagePath = await result.image.saveToTempDir(path);
+      if (saveImagesToDownloadDir) {
+        var imagePath = await result.image.saveToDownloadDir(path);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text("Image saved to $imagePath"),
+        ));
+      }
       setState(() {
         _onItemTapped(1);
       });
@@ -227,6 +204,10 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
             icon: Icon(Icons.image),
             label: 'Image',
           ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.settings),
+            label: 'Settings',
+          ),
         ],
         currentIndex: _selectedIndex,
         onTap: _onItemTapped,
@@ -237,7 +218,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
               tooltip: 'Pick Image',
               child: Icon(Icons.add_a_photo))
           : null,
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
     );
   }
 
@@ -272,7 +253,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
       controller: pageController,
       physics: NeverScrollableScrollPhysics(),
       onPageChanged: _pageChanged,
-      children: <Widget>[cameraPage(), mrcnnPage()],
+      children: [cameraPage(), mrcnnPage(), settingsPage()],
     );
   }
 
@@ -281,18 +262,61 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
         color: Colors.black,
         child: !getImageRunning && controller.value.isInitialized
             ? CameraPreview(controller)
-            : originalImage == null
+            : originalImagePath == null
                 ? Center(child: CircularProgressIndicator())
-                : originalImage);
+                : Image.file(File(originalImagePath!)));
   }
 
   Widget mrcnnPage() {
     return Container(
-        child: (filename == null
-            ? Icon(
-                Icons.image_not_supported,
-                size: 100,
+        child: (newImagePath == null
+            ? Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.image_not_supported,
+                    size: 100,
+                  ),
+                  Text('Take a picture first'),
+                ],
               )
-            : Image.file(File(filename!))));
+            : Image.file(File(newImagePath!))));
+  }
+
+  Widget settingsPage() {
+    return Container(
+      alignment: Alignment.center,
+      child: ListView(
+        physics: NeverScrollableScrollPhysics(),
+        prototypeItem: ListTile(),
+        children: [
+          SwitchListTile(
+            title: Text('Save photos to download dir'),
+            value: saveImagesToDownloadDir,
+            onChanged: (bool value) {
+              setState(() {
+                saveImagesToDownloadDir = value;
+                _savePref('saveToDownloadDir', saveImagesToDownloadDir);
+              });
+            },
+            tileColor: Theme.of(context).colorScheme.surface,
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.all(Radius.circular(10))),
+          ),
+          ListTile(
+            trailing: Icon(Icons.delete),
+            title: Text('Delete all photos'),
+            onTap: () => 1,
+            tileColor: Theme.of(context).colorScheme.surface,
+            focusColor: Colors.red,
+            hoverColor: Colors.red,
+            selectedTileColor: Colors.red,
+            selected: true,
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.all(Radius.circular(10))),
+          ),
+        ],
+      ),
+    );
   }
 }

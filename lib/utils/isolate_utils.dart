@@ -30,7 +30,7 @@ Future<void> predictIsolate(SendPort sendPort) async {
 
     if (r["class_ids"].length > 0) {
       image.image = await displayInstances(image.imageList, r["rois"],
-          r["masks"], r["class_ids"], CarPartsConfig.CLASS_NAMES);
+          r["masks"], r["class_ids"], CarPartsConfig.CLASS_NAMES, scores: r["scores"]);
     }
 
     replyTo.send(IsolateMsg(image, foundInstances: r["class_ids"].length));

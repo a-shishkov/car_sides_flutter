@@ -17,7 +17,9 @@ class ImageExtender {
 
   ImageExtender.fromImage(ImagePackage.Image image) : image = image;
 
-  ImageExtender.from(ImageExtender imageExtender) : image = imageExtender.image, path = imageExtender.path;
+  ImageExtender.from(ImageExtender imageExtender)
+      : image = imageExtender.image,
+        path = imageExtender.path;
 
   List get imageList {
     return image
@@ -45,17 +47,59 @@ class ImageExtender {
     }
   }
 
-  save(path) async {
+  save(path, [refreshPath = true]) async {
     await File(path).writeAsBytes(encodePng);
-    return this.path = path;
+    if (refreshPath) {
+      this.path = path;
+    }
+    return path;
   }
 
   saveToTempDir(path) async {
     return await save((await getTemporaryDirectory()).path + '/' + path);
   }
 
-  addPadding(padding)
-  {
+  saveToDownloadDir(path) async {
+    return await save('/storage/emulated/0/Download/$path', false);
+  }
+
+  addPadding(padding) {
     return utils.addPadding(imageList, padding);
+  }
+
+  rotateList(angle) {
+    assert(angle == 90 || angle == -90 || angle == 180);
+
+    int newH, newW;
+    if (angle == 180) {
+      newH = imageList.shape[0];
+      newW = imageList.shape[1];
+    } else {
+      newW = imageList.shape[0];
+      newH = imageList.shape[1];
+    }
+
+    List output = List.generate(
+        newH, (e) => List.generate(newW, (e) => List.filled(3, 0)));
+
+    for (var i = 0; i < newH; i++) {
+      for (var j = 0; j < newW; j++) {
+        for (var k = 0; k < 3; k++) {
+          switch (angle) {
+            case -90:
+              output[newW - 1 - j][i][k] = imageList[i][j][k];
+              break;
+            case 90:
+              output[j][newH - 1 - i][k] = imageList[i][j][k];
+              break;
+            case 180:
+              output[newH - 1 - i][newW - 1 - j][k] = imageList[i][j][k];
+              break;
+          }
+        }
+      }
+    }
+
+    return output;
   }
 }
