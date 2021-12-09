@@ -1,7 +1,6 @@
 import 'package:tflite_flutter/tflite_flutter.dart';
 import 'package:image/image.dart' as ImagePackage;
 import 'dart:ui';
-import 'package:intl/intl.dart';
 import 'package:flutter/material.dart';
 
 import 'config.dart';

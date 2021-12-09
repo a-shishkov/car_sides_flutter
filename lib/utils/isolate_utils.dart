@@ -1,7 +1,6 @@
 import 'dart:isolate';
 import 'package:flutter_app/mrcnn/config.dart';
 import 'package:flutter_app/mrcnn/model.dart';
-import 'package:flutter_app/mrcnn/utils.dart';
 import 'package:flutter_app/mrcnn/visualize.dart';
 import 'package:flutter_app/utils/image_extender.dart';
 

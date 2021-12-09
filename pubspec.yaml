@@ -39,6 +39,7 @@ dependencies:
   get: ^4.1.4
   loader_overlay: ^2.0.2+1
   shared_preferences: ^2.0.9
+  filesize: ^2.0.1
 
 dev_dependencies:
   flutter_test:

@@ -4,6 +4,8 @@ import 'dart:isolate';
 import 'package:flutter/material.dart';
 import 'package:flutter/widgets.dart';
 import 'package:f_logs/f_logs.dart';
+import 'package:flutter_app/pages.dart';
+import 'package:flutter_app/utils/cache_folder_info.dart';
 import 'package:flutter_app/utils/image_extender.dart';
 import 'package:flutter_app/utils/isolate_utils.dart';
 import 'package:camera/camera.dart';
@@ -56,6 +58,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
 
   String? newImagePath;
   String? originalImagePath;
+  String cacheDirInfo = "Calculating...";
 
   bool getImageRunning = false;
   bool saveImagesToDownloadDir = false;
@@ -253,69 +256,96 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
       controller: pageController,
       physics: NeverScrollableScrollPhysics(),
       onPageChanged: _pageChanged,
-      children: [cameraPage(), mrcnnPage(), settingsPage()],
+      children: [
+        cameraPage(getImageRunning, controller, originalImagePath),
+        mrcnnPage(newImagePath),
+        settingsPage()
+      ],
     );
   }
 
-  Widget cameraPage() {
-    return Container(
-        color: Colors.black,
-        child: !getImageRunning && controller.value.isInitialized
-            ? CameraPreview(controller)
-            : originalImagePath == null
-                ? Center(child: CircularProgressIndicator())
-                : Image.file(File(originalImagePath!)));
-  }
-
-  Widget mrcnnPage() {
-    return Container(
-        child: (newImagePath == null
-            ? Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.image_not_supported,
-                    size: 100,
-                  ),
-                  Text('Take a picture first'),
-                ],
-              )
-            : Image.file(File(newImagePath!))));
-  }
-
   Widget settingsPage() {
+    bool deleteEnabled = true;
     return Container(
       alignment: Alignment.center,
       child: ListView(
         physics: NeverScrollableScrollPhysics(),
-        prototypeItem: ListTile(),
-        children: [
-          SwitchListTile(
-            title: Text('Save photos to download dir'),
-            value: saveImagesToDownloadDir,
-            onChanged: (bool value) {
-              setState(() {
-                saveImagesToDownloadDir = value;
-                _savePref('saveToDownloadDir', saveImagesToDownloadDir);
-              });
-            },
-            tileColor: Theme.of(context).colorScheme.surface,
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.all(Radius.circular(10))),
-          ),
-          ListTile(
-            trailing: Icon(Icons.delete),
-            title: Text('Delete all photos'),
-            onTap: () => 1,
-            tileColor: Theme.of(context).colorScheme.surface,
-            focusColor: Colors.red,
-            hoverColor: Colors.red,
-            selectedTileColor: Colors.red,
-            selected: true,
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.all(Radius.circular(10))),
-          ),
-        ],
+        children: ListTile.divideTiles(
+          context: context,
+          tiles: [
+            SwitchListTile(
+              title: Text('Save photos to download dir'),
+              value: saveImagesToDownloadDir,
+              onChanged: (bool value) {
+                _savePref('saveToDownloadDir', value);
+                setState(() {
+                  saveImagesToDownloadDir = value;
+                });
+              },
+              tileColor: Theme.of(context).colorScheme.surface,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.all(Radius.circular(10))),
+            ),
+            FutureBuilder(
+              future: cacheDirImagesSize(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.done) {
+                  if (snapshot.data.toString() == "0 items") {
+                    deleteEnabled = false;
+                  } else {
+                    deleteEnabled = true;
+                  }
+                  cacheDirInfo = snapshot.data.toString();
+                }
+                return ListTile(
+                  enabled: deleteEnabled,
+                  trailing: Icon(
+                    Icons.delete,
+                    color: deleteEnabled
+                        ? Theme.of(context).colorScheme.primary
+                        : Colors.grey,
+                  ),
+                  title: Text('Delete all photos'),
+                  subtitle: Text(cacheDirInfo),
+                  onTap: () {
+                    showDialog<String>(
+                      context: context,
+                      builder: (BuildContext context) => AlertDialog(
+                        title: const Text('Delete files?'),
+                        content:
+                            const Text('Delete all files in cache folder?'),
+                        actions: <Widget>[
+                          TextButton(
+                            onPressed: () => Navigator.pop(context, 'No'),
+                            child: const Text('No'),
+                          ),
+                          TextButton(
+                            onPressed: () async {
+                              Navigator.pop(context, 'Yes');
+                              await deleteAllImages();
+                              setState(() {
+                                newImagePath = null;
+                              });
+                            },
+                            child: const Text('Yes'),
+                            style: ButtonStyle(
+                                foregroundColor:
+                                    MaterialStateProperty.all<Color>(
+                                        Colors.red)),
+                          ),
+                        ],
+                      ),
+                      barrierDismissible: false,
+                    );
+                  },
+                  tileColor: Theme.of(context).colorScheme.surface,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.all(Radius.circular(10))),
+                );
+              },
+            ),
+          ],
+        ).toList(),
       ),
     );
   }

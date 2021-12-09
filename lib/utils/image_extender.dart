@@ -31,8 +31,8 @@ class ImageExtender {
 
   int get width => image.width;
 
-  get encodePng {
-    return ImagePackage.encodePng(image);
+  get encodeJpg {
+    return ImagePackage.encodeJpg(image);
   }
 
   setImage(image) async {
@@ -48,7 +48,7 @@ class ImageExtender {
   }
 
   save(path, [refreshPath = true]) async {
-    await File(path).writeAsBytes(encodePng);
+    await File(path).writeAsBytes(encodeJpg);
     if (refreshPath) {
       this.path = path;
     }
