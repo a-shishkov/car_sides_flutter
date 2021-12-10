@@ -6,12 +6,32 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_app/utils/cache_folder_info.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-Widget cameraPage(predictProgress, getImageRunning, controller, originalImagePath) {
+Widget cameraPage(
+    predictProgress, getImageRunning, controller, originalImagePath) {
+  var progressMsg = {
+    0.1: "Taking picture",
+    0.3: "Start prediction",
+    0.4: "Waiting for result",
+    0.7: "Saving picture",
+    0.9: "Done"
+  };
+
   return Container(
       color: Colors.black,
       child: !getImageRunning && controller.value.isInitialized
           ? CameraPreview(controller)
-          : Center(child: CircularProgressIndicator(value: predictProgress,)));
+          : Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+              CircularProgressIndicator(
+                value: predictProgress,
+              ),
+              SizedBox(
+                height: 10,
+              ),
+              Text(
+                progressMsg[predictProgress]!,
+                style: TextStyle(color: Colors.white),
+              ),
+            ]));
 }
 
 Widget mrcnnPage(newImagePath) {

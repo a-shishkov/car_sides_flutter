@@ -59,7 +59,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   String? originalImagePath;
 
   bool getImageRunning = false;
-  double predictProgress = 0.0;
+  double? predictProgress = 0.0;
 
   int _selectedIndex = 0;
   PageController pageController = PageController(
@@ -132,14 +132,18 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     if (!controller.value.isInitialized || getImageRunning) {
       return;
     }
-    getImageRunning = true;
+
+    setState(() {
+      predictProgress = 0.1;
+      getImageRunning = true;
+    });
 
     XFile file = await controller.takePicture();
 
     ImageExtender originalIE = ImageExtender.decodeImageFromPath(file.path);
 
     setState(() {
-      predictProgress = 0.1;
+      predictProgress = 0.3;
       originalImagePath = originalIE.path!;
     });
 
@@ -147,14 +151,15 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     await Isolate.spawn(predictIsolate, receivePort.sendPort);
 
     setState(() {
-      predictProgress = 0.3;
+      predictProgress = 0.4;
     });
     SendPort sendPort = await receivePort.first;
+
     var result = await sendReceive(sendPort,
         IsolateMsg(originalIE, interpreterAddress: interpreter.address));
 
     setState(() {
-      predictProgress = 0.9;
+      predictProgress = 0.7;
     });
     if (result.foundInstances > 0) {
       var path =
@@ -198,7 +203,8 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
           highlightColor: getImageRunning ? Colors.transparent : null,
         ),
         child: BottomNavigationBar(
-          selectedItemColor: getImageRunning ? Theme.of(context).colorScheme.background : null,
+          selectedItemColor:
+              getImageRunning ? Theme.of(context).colorScheme.background : null,
           unselectedItemColor: getImageRunning ? Colors.grey[400] : null,
           items: [
             BottomNavigationBarItem(
@@ -218,7 +224,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
           onTap: _onItemTapped,
         ),
       ),
-      floatingActionButton: _selectedIndex == 0
+      floatingActionButton: _selectedIndex == 0 && !getImageRunning
           ? FloatingActionButton(
               onPressed: getImage,
               tooltip: 'Pick Image',
