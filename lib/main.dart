@@ -59,6 +59,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   String? originalImagePath;
 
   bool getImageRunning = false;
+  double predictProgress = 0.0;
 
   int _selectedIndex = 0;
   PageController pageController = PageController(
@@ -138,18 +139,23 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     ImageExtender originalIE = ImageExtender.decodeImageFromPath(file.path);
 
     setState(() {
+      predictProgress = 0.1;
       originalImagePath = originalIE.path!;
     });
-
-    context.loaderOverlay.show();
 
     ReceivePort receivePort = ReceivePort();
     await Isolate.spawn(predictIsolate, receivePort.sendPort);
 
+    setState(() {
+      predictProgress = 0.3;
+    });
     SendPort sendPort = await receivePort.first;
     var result = await sendReceive(sendPort,
         IsolateMsg(originalIE, interpreterAddress: interpreter.address));
 
+    setState(() {
+      predictProgress = 0.9;
+    });
     if (result.foundInstances > 0) {
       var path =
           DateFormat('yyyyMMdd_HH_mm_ss').format(DateTime.now()) + '.png';
@@ -163,16 +169,18 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
         ));
       }
       setState(() {
+        predictProgress = 0.9;
         _onItemTapped(1);
       });
     } else {
+      predictProgress = 1.0;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: const Text('No instances found'),
       ));
     }
     setState(() {
+      predictProgress = 1.0;
       getImageRunning = false;
-      context.loaderOverlay.hide();
     });
   }
 
@@ -184,23 +192,31 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
       ),
       body: WillPopScope(
           onWillPop: () => Future.sync(onWillPop), child: buildPageView()),
-      bottomNavigationBar: BottomNavigationBar(
-        items: [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.camera),
-            label: 'Camera',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.image),
-            label: 'Image',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.settings),
-            label: 'Settings',
-          ),
-        ],
-        currentIndex: _selectedIndex,
-        onTap: _onItemTapped,
+      bottomNavigationBar: Theme(
+        data: ThemeData(
+          splashColor: getImageRunning ? Colors.transparent : null,
+          highlightColor: getImageRunning ? Colors.transparent : null,
+        ),
+        child: BottomNavigationBar(
+          selectedItemColor: getImageRunning ? Theme.of(context).colorScheme.background : null,
+          unselectedItemColor: getImageRunning ? Colors.grey[400] : null,
+          items: [
+            BottomNavigationBarItem(
+              icon: Icon(Icons.camera),
+              label: 'Camera',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.image),
+              label: 'Image',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.settings),
+              label: 'Settings',
+            ),
+          ],
+          currentIndex: _selectedIndex,
+          onTap: _onItemTapped,
+        ),
       ),
       floatingActionButton: _selectedIndex == 0
           ? FloatingActionButton(
@@ -232,9 +248,11 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
 
   void _onItemTapped(int index) {
     setState(() {
-      _selectedIndex = index;
-      pageController.animateToPage(index,
-          duration: Duration(milliseconds: 500), curve: Curves.ease);
+      if (!getImageRunning) {
+        _selectedIndex = index;
+        pageController.animateToPage(index,
+            duration: Duration(milliseconds: 500), curve: Curves.ease);
+      }
     });
   }
 
@@ -244,7 +262,8 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
       physics: NeverScrollableScrollPhysics(),
       onPageChanged: _pageChanged,
       children: [
-        cameraPage(getImageRunning, controller, originalImagePath),
+        cameraPage(
+            predictProgress, getImageRunning, controller, originalImagePath),
         mrcnnPage(newImagePath),
         SettingsPage(prefs)
       ],

@@ -6,14 +6,12 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_app/utils/cache_folder_info.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-Widget cameraPage(getImageRunning, controller, originalImagePath) {
+Widget cameraPage(predictProgress, getImageRunning, controller, originalImagePath) {
   return Container(
       color: Colors.black,
       child: !getImageRunning && controller.value.isInitialized
           ? CameraPreview(controller)
-          : originalImagePath == null
-              ? Center(child: CircularProgressIndicator())
-              : Image.file(File(originalImagePath!)));
+          : Center(child: CircularProgressIndicator(value: predictProgress,)));
 }
 
 Widget mrcnnPage(newImagePath) {
