@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/widgets.dart';
 import 'package:f_logs/f_logs.dart';
 import 'package:flutter_app/pages.dart';
-import 'package:flutter_app/utils/cache_folder_info.dart';
 import 'package:flutter_app/utils/image_extender.dart';
 import 'package:flutter_app/utils/isolate_utils.dart';
 import 'package:camera/camera.dart';
@@ -58,10 +57,8 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
 
   String? newImagePath;
   String? originalImagePath;
-  String cacheDirInfo = "Calculating...";
 
   bool getImageRunning = false;
-  bool saveImagesToDownloadDir = false;
 
   int _selectedIndex = 0;
   PageController pageController = PageController(
@@ -83,21 +80,9 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     });
   }
 
-  _savePref(String name, bool value) async {
-    await prefs.setBool(name, value);
-  }
-
   @override
   void initState() {
     super.initState();
-    bool? boolValue = prefs.getBool('saveToDownloadDir');
-    print("boolValue $boolValue");
-    if (boolValue != null) {
-      saveImagesToDownloadDir = boolValue;
-    } else {
-      print("save boolValue");
-      _savePref('saveToDownloadDir', true);
-    }
 
     initializeCameraController();
     WidgetsBinding.instance!.addObserver(this);
@@ -169,7 +154,9 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
       var path =
           DateFormat('yyyyMMdd_HH_mm_ss').format(DateTime.now()) + '.png';
       newImagePath = await result.image.saveToTempDir(path);
-      if (saveImagesToDownloadDir) {
+
+      bool? saveExternal = prefs.getBool('saveToDownloadDir');
+      if (saveExternal != null && saveExternal) {
         var imagePath = await result.image.saveToDownloadDir(path);
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text("Image saved to $imagePath"),
@@ -259,94 +246,8 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
       children: [
         cameraPage(getImageRunning, controller, originalImagePath),
         mrcnnPage(newImagePath),
-        settingsPage()
+        SettingsPage(prefs)
       ],
-    );
-  }
-
-  Widget settingsPage() {
-    bool deleteEnabled = true;
-    return Container(
-      alignment: Alignment.center,
-      child: ListView(
-        physics: NeverScrollableScrollPhysics(),
-        children: ListTile.divideTiles(
-          context: context,
-          tiles: [
-            SwitchListTile(
-              title: Text('Save photos to download dir'),
-              value: saveImagesToDownloadDir,
-              onChanged: (bool value) {
-                _savePref('saveToDownloadDir', value);
-                setState(() {
-                  saveImagesToDownloadDir = value;
-                });
-              },
-              tileColor: Theme.of(context).colorScheme.surface,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.all(Radius.circular(10))),
-            ),
-            FutureBuilder(
-              future: cacheDirImagesSize(),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.done) {
-                  if (snapshot.data.toString() == "0 items") {
-                    deleteEnabled = false;
-                  } else {
-                    deleteEnabled = true;
-                  }
-                  cacheDirInfo = snapshot.data.toString();
-                }
-                return ListTile(
-                  enabled: deleteEnabled,
-                  trailing: Icon(
-                    Icons.delete,
-                    color: deleteEnabled
-                        ? Theme.of(context).colorScheme.primary
-                        : Colors.grey,
-                  ),
-                  title: Text('Delete all photos'),
-                  subtitle: Text(cacheDirInfo),
-                  onTap: () {
-                    showDialog<String>(
-                      context: context,
-                      builder: (BuildContext context) => AlertDialog(
-                        title: const Text('Delete files?'),
-                        content:
-                            const Text('Delete all files in cache folder?'),
-                        actions: <Widget>[
-                          TextButton(
-                            onPressed: () => Navigator.pop(context, 'No'),
-                            child: const Text('No'),
-                          ),
-                          TextButton(
-                            onPressed: () async {
-                              Navigator.pop(context, 'Yes');
-                              await deleteAllImages();
-                              setState(() {
-                                newImagePath = null;
-                              });
-                            },
-                            child: const Text('Yes'),
-                            style: ButtonStyle(
-                                foregroundColor:
-                                    MaterialStateProperty.all<Color>(
-                                        Colors.red)),
-                          ),
-                        ],
-                      ),
-                      barrierDismissible: false,
-                    );
-                  },
-                  tileColor: Theme.of(context).colorScheme.surface,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.all(Radius.circular(10))),
-                );
-              },
-            ),
-          ],
-        ).toList(),
-      ),
     );
   }
 }
