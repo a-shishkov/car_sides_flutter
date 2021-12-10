@@ -9,9 +9,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 Widget cameraPage(
     predictProgress, getImageRunning, controller, originalImagePath) {
   var progressMsg = {
+    0.0: "Nothing",
     0.1: "Taking picture",
     0.3: "Start prediction",
     0.4: "Waiting for result",
+    0.5: "Running model",
+    0.6: "Visualizing result",
     0.7: "Saving picture",
     0.9: "Done"
   };

@@ -13,31 +13,39 @@ class IsolateMsg {
 }
 
 Future<void> predictIsolate(SendPort sendPort) async {
-  ReceivePort port = ReceivePort();
+  var msg = await receiveSent(sendPort);
+  var data = msg[0];
+  SendPort replyTo = msg[1];
 
-  sendPort.send(port.sendPort);
+  ImageExtender image = data.image;
+  var address = data.interpreterAddress;
 
-  await for (var msg in port) {
-    IsolateMsg data = msg[0];
-    SendPort replyTo = msg[1];
+  var model = MaskRCNN.fromAddress(address!);
+  replyTo = await sendReceive(replyTo, 0.5);
+  var r = await model.detect(image);
+  replyTo = await sendReceive(replyTo, 0.6);
 
-    ImageExtender image = data.image;
-    var address = data.interpreterAddress;
-
-    var model = MaskRCNN.fromAddress(address!);
-    var r = await model.detect(image);
-
-    if (r["class_ids"].length > 0) {
-      image.image = await displayInstances(image.imageList, r["rois"],
-          r["masks"], r["class_ids"], CarPartsConfig.CLASS_NAMES, scores: r["scores"]);
-    }
-
-    replyTo.send(IsolateMsg(image, foundInstances: r["class_ids"].length));
+  if (r["class_ids"].length > 0) {
+    image.image = await displayInstances(image.imageList, r["rois"], r["masks"],
+        r["class_ids"], CarPartsConfig.CLASS_NAMES,
+        scores: r["scores"]);
   }
+
+  replyTo.send(IsolateMsg(image, foundInstances: r["class_ids"].length));
 }
 
-Future sendReceive(SendPort port, msg) {
+Future receiveSent(SendPort port) {
   ReceivePort response = ReceivePort();
-  port.send([msg, response.sendPort]);
+  port.send(response.sendPort);
+  return response.first;
+}
+
+Future sendReceive(SendPort port, [msg]) {
+  ReceivePort response = ReceivePort();
+  if (msg == null) {
+    port.send(response.sendPort);
+  } else {
+    port.send([msg, response.sendPort]);
+  }
   return response.first;
 }

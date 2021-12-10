@@ -59,7 +59,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   String? originalImagePath;
 
   bool getImageRunning = false;
-  double? predictProgress = 0.0;
+  double predictProgress = 0.0;
 
   int _selectedIndex = 0;
   PageController pageController = PageController(
@@ -155,8 +155,19 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     });
     SendPort sendPort = await receivePort.first;
 
-    var result = await sendReceive(sendPort,
-        IsolateMsg(originalIE, interpreterAddress: interpreter.address));
+    var msg = await sendReceive(sendPort, IsolateMsg(originalIE, interpreterAddress: interpreter.address));
+    setState(() {
+      predictProgress = msg[0];
+    });
+    sendPort = msg[1];
+
+    msg = await sendReceive(sendPort);
+    setState(() {
+      predictProgress = msg[0];
+    });
+    sendPort = msg[1];
+
+    var result = await sendReceive(sendPort);
 
     setState(() {
       predictProgress = 0.7;
