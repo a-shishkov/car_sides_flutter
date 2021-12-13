@@ -17,6 +17,11 @@ class ImageExtender {
 
   ImageExtender.fromImage(ImagePackage.Image image) : image = image;
 
+  ImageExtender.fromBytes(int width, int height, List<int> bytes,
+      {ImagePackage.Format format = ImagePackage.Format.rgb})
+      : image =
+            ImagePackage.Image.fromBytes(width, height, bytes, format: format);
+
   ImageExtender.from(ImageExtender imageExtender)
       : image = imageExtender.image,
         path = imageExtender.path;
@@ -40,11 +45,27 @@ class ImageExtender {
     await save(path);
   }
 
+  resize(width, height) {
+    image = ImagePackage.copyResize(image, width: width, height: height, interpolation: ImagePackage.Interpolation.average);
+  }
+
   rotate(num angle) async {
     image = ImagePackage.copyRotate(image, angle);
     if (path != null) {
       await save(path);
     }
+  }
+
+  drawRect(int x1, int y1, int x2, int y2, int color) {
+    image = ImagePackage.drawRect(image, x1, y1, x2, y2, color);
+  }
+
+  drawString(ImagePackage.BitmapFont font, x, y, String string) {
+    image = ImagePackage.drawString(image, font, x, y, string);
+  }
+
+  drawImage(ImagePackage.Image src) {
+    image = ImagePackage.drawImage(image, src);
   }
 
   save(path, [refreshPath = true]) async {

@@ -1,3 +1,4 @@
+import 'package:flutter_app/utils/image_extender.dart';
 import 'package:tflite_flutter/tflite_flutter.dart';
 import 'package:image/image.dart' as ImagePackage;
 import 'dart:ui';
@@ -15,23 +16,23 @@ randomColors(N, [bright = true]) {
   return rgb;
 }
 
-ImagePackage.Image applyMask(
-    ImagePackage.Image maskedImage, List mask, Color color,
+ImageExtender applyMask(
+    ImageExtender maskedImage, List mask, Color color,
     {alpha = 0.5}) {
   var maskImageList = List.generate(
       mask.shape[0],
-          (i) => List.generate(
+      (i) => List.generate(
           mask.shape[1],
-              (j) => mask[i][j]
+          (j) => mask[i][j]
               ? [color.red, color.green, color.blue, (255 * alpha).toInt()]
               : [0, 0, 0, 0]));
   var maskImage = ImagePackage.Image.fromBytes(
       mask.shape[1], mask.shape[0], maskImageList.flatten());
-  maskedImage = ImagePackage.drawImage(maskedImage, maskImage);
+  maskedImage.drawImage(maskImage);
   return maskedImage;
 }
 
-displayInstances(List image, List boxes, List masks, List classIds, classNames,
+displayInstances(ImageExtender originalImage, List boxes, List masks, List classIds, classNames,
     {scores, title, showMask = true, showBbox = true, colors, captions}) async {
   if (boxes.isEmpty) {
     print("No instances to display");
@@ -42,12 +43,6 @@ displayInstances(List image, List boxes, List masks, List classIds, classNames,
     colors = randomColors(N);
   }
 
-  var height = image.shape[0];
-  var width = image.shape[1];
-
-  ImagePackage.Image maskedImage = ImagePackage.Image.fromBytes(
-      width, height, image.flatten(),
-      format: ImagePackage.Format.rgb);
   for (var i = 0; i < N; i++) {
     Color color = colors[i];
     //     if not np.any(boxes[i]):
@@ -58,23 +53,22 @@ displayInstances(List image, List boxes, List masks, List classIds, classNames,
     var y2 = boxes[i][2];
     var x2 = boxes[i][3];
 
-    maskedImage = ImagePackage.drawRect(maskedImage, x1, y1, x2, y2,
+    originalImage.drawRect(x1, y1, x2, y2,
         ImagePackage.getColor(color.red, color.green, color.blue));
 
     var mask = masks[i];
-    if (showMask) maskedImage = applyMask(maskedImage, mask, color);
+    if (showMask) originalImage = applyMask(originalImage, mask, color);
 
     if (captions == null) {
       var classId = classIds[i];
       var score = scores != null ? scores[i] : null;
       var label = CarPartsConfig.CLASS_NAMES[classId];
       var caption =
-      score != null ? '$label ${score.toStringAsFixed(3)}' : '$label';
-      maskedImage = ImagePackage.drawString(
-          maskedImage, ImagePackage.arial_24, x1, y1 + 8, caption);
+          score != null ? '$label ${score.toStringAsFixed(3)}' : '$label';
+      originalImage.drawString(ImagePackage.arial_24, x1, y1 + 8, caption);
     }
   }
-  return maskedImage;
+  return originalImage;
 /*
   Directory appCacheDirectory = await getTemporaryDirectory();
   String appCachesPath = appCacheDirectory.path;

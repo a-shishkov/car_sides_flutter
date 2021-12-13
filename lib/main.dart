@@ -155,7 +155,8 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     });
     SendPort sendPort = await receivePort.first;
 
-    var msg = await sendReceive(sendPort, IsolateMsg(originalIE, interpreterAddress: interpreter.address));
+    var msg = await sendReceive(sendPort,
+        IsolateMsg(originalIE, interpreterAddress: interpreter.address));
     setState(() {
       predictProgress = msg[0];
     });
@@ -265,11 +266,9 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
 
   void _onItemTapped(int index) {
     setState(() {
-      if (!getImageRunning) {
-        _selectedIndex = index;
-        pageController.animateToPage(index,
-            duration: Duration(milliseconds: 500), curve: Curves.ease);
-      }
+      _selectedIndex = index;
+      pageController.animateToPage(index,
+          duration: Duration(milliseconds: 500), curve: Curves.ease);
     });
   }
 

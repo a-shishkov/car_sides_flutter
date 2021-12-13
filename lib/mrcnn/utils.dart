@@ -132,23 +132,24 @@ List unmoldMask(List mask, bbox, imageShape) {
   int x1 = bbox[1];
   int y2 = bbox[2];
   int x2 = bbox[3];
-  var boolMask = List.generate(
+  // TODO: implement mask resize
+  var pixelMask = List.generate(
       mask.shape[0],
-      (i) => List.generate(mask.shape[1],
-          (j) => mask[i][j] >= threshold ? [255, 255, 255] : [0, 0, 0]));
-  var maskImage = Image.fromBytes(
-      mask.shape[0], mask.shape[1], boolMask.flatten(),
-      format: Format.rgb);
-  maskImage = copyResize(maskImage, width: x2 - x1, height: y2 - y1);
-  mask = imageTo3DList(maskImage);
+      (i) => List.generate(
+          mask.shape[1], (j) => List.generate(3, (_) => (mask[i][j] * 255).toInt())));
+
+  var maskImage =
+      ImageExtender.fromBytes(mask.shape[0], mask.shape[1], pixelMask.flatten());
+
+  maskImage.resize(x2 - x1, y2 - y1);
+  mask = maskImage.imageList;
   var binaryMask = [];
-  Function eq = const ListEquality().equals;
   for (var i = 0; i < mask.shape[0]; i++) {
     for (var j = 0; j < mask.shape[1]; j++) {
-      if (eq(mask[i][j], [0, 0, 0]))
-        binaryMask.add(false);
-      else
+      if ((mask[i][j] as List).first > threshold * 255)
         binaryMask.add(true);
+      else
+        binaryMask.add(false);
     }
   }
   binaryMask = binaryMask.reshape([mask.shape[0], mask.shape[1]]);
