@@ -16,8 +16,7 @@ randomColors(N, [bright = true]) {
   return rgb;
 }
 
-ImageExtender applyMask(
-    ImageExtender maskedImage, List mask, Color color,
+ImageExtender applyMask(ImageExtender maskedImage, List mask, Color color,
     {alpha = 0.5}) {
   var maskImageList = List.generate(
       mask.shape[0],
@@ -32,8 +31,15 @@ ImageExtender applyMask(
   return maskedImage;
 }
 
-displayInstances(ImageExtender originalImage, List boxes, List masks, List classIds, classNames,
-    {scores, title, showMask = true, showBbox = true, colors, captions}) async {
+displayInstances(ImageExtender originalImage, List boxes, List masks,
+    List classIds, classNames,
+    {scores,
+    title,
+    showMask = true,
+    showBbox = true,
+    colors,
+    captions,
+    saveMasks = false}) async {
   if (boxes.isEmpty) {
     print("No instances to display");
     return;
@@ -57,7 +63,29 @@ displayInstances(ImageExtender originalImage, List boxes, List masks, List class
         ImagePackage.getColor(color.red, color.green, color.blue));
 
     var mask = masks[i];
-    if (showMask) originalImage = applyMask(originalImage, mask, color);
+    ImageExtender maskIE = ImageExtender.fromImage(mask);
+    if (saveMasks) {
+      await maskIE.saveToTempDir(
+          "${originalImage.path!.split('/').last.split('.').first}_MASK_$i.jpg");
+    }
+    if (showMask) {
+      if (saveMasks) {
+        var maskBytes = maskIE.imageList;
+        var boolMask = List.generate(maskBytes.shape[0],
+            (index) => List.generate(maskBytes.shape[1], (index) => false));
+        for (var i = 0; i < maskBytes.shape[0]; i++) {
+          for (var j = 0; j < maskBytes.shape[1]; j++) {
+            if ((maskBytes[i][j] as List).first > 0.5 * 255) {
+              boolMask[i][j] = true;
+            }
+          }
+        }
+        maskIE.resize(originalImage.width, originalImage.height);
+        originalImage = applyMask(originalImage, boolMask, color);
+      } else {
+        originalImage.image = ImagePackage.drawImage(originalImage.image, mask);
+      }
+    }
 
     if (captions == null) {
       var classId = classIds[i];

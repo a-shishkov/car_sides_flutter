@@ -126,7 +126,7 @@ Future<Map> resizeImage(ImageExtender image,
   };
 }
 
-List unmoldMask(List mask, bbox, imageShape) {
+Future<Image> unmoldMask(List mask, bbox, imageShape, {saveMasks = false}) async{
   var threshold = 0.5;
   int y1 = bbox[0];
   int x1 = bbox[1];
@@ -135,14 +135,33 @@ List unmoldMask(List mask, bbox, imageShape) {
   // TODO: implement mask resize
   var pixelMask = List.generate(
       mask.shape[0],
-      (i) => List.generate(
-          mask.shape[1], (j) => List.generate(3, (_) => (mask[i][j] * 255).toInt())));
+      (i) => List.generate(mask.shape[1],
+          (j) => List.generate(3, (_) => (mask[i][j] * 255).toInt())));
 
-  var maskImage =
-      ImageExtender.fromBytes(mask.shape[0], mask.shape[1], pixelMask.flatten());
+  var maskImage = ImageExtender.fromBytes(
+      mask.shape[0], mask.shape[1], pixelMask.flatten());
 
-  maskImage.resize(x2 - x1, y2 - y1);
-  mask = maskImage.imageList;
+  if (saveMasks) {
+    await maskImage.saveToTempDir("original_mask_${y1}_${x1}_${y2}_$x2.png");
+  }
+
+  var resizeScale = 1;
+  var origMask = maskImage;
+  maskImage.resize((x2 - x1) * resizeScale, (y2 - y1) * resizeScale);
+  if (false) {
+    // maskImage.saveToTempDir(
+    //     "resized_${resizeScale}x_mask_${y1}_${x1}_${y2}_$x2.png");
+    for (var i = 1; i < 20; i++) {
+      maskImage = origMask;
+      var timeStart = DateTime.now().millisecondsSinceEpoch;
+      maskImage.resize((x2 - x1) * i, (y2 - y1) * i);
+      var timeElapsed =
+          DateTime.now().millisecondsSinceEpoch - timeStart;
+      await maskImage.saveToTempDir(
+          "resized_${i}x_${timeElapsed}_mask_${y1}_${x1}_${y2}_$x2.png");
+    }
+  }
+/*  mask = maskImage.imageList;
   var binaryMask = [];
   for (var i = 0; i < mask.shape[0]; i++) {
     for (var j = 0; j < mask.shape[1]; j++) {
@@ -159,7 +178,11 @@ List unmoldMask(List mask, bbox, imageShape) {
           imageShape[1],
           (j) => (i >= y1 && i < y2 && j >= x1 && j < x2)
               ? binaryMask[i - y1][j - x1]
-              : false));
+              : false));*/
+  var fullMask = Image.rgb(imageShape[1], imageShape[0]);
+  fullMask.channels = Channels.rgba;
+  fullMask = drawImage(fullMask, maskImage.image,
+      dstX: x1, dstY: y1, dstW: x2 - x1, dstH: y2 - y1);
 
   return fullMask;
 }

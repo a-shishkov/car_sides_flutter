@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_app/mrcnn/utils.dart';
 import 'package:flutter_app/utils/image_extender.dart';
 import 'package:tflite_flutter/tflite_flutter.dart';
@@ -45,8 +46,8 @@ class MaskRCNN {
     };
   }
 
-  List unmoldDetections(
-      detections, List mrcnnMask, originalImageShape, imageShape, window) {
+  Future<List> unmoldDetections(
+      detections, List mrcnnMask, originalImageShape, imageShape, window, {saveMasks = false}) async{
     var N = detections.length;
     for (var i = 0; i < detections.length; i++) {
       if (detections[i][4] == 0) {
@@ -109,13 +110,13 @@ class MaskRCNN {
     N = boxes.length;
     List fullMasks = [];
     for (var i = 0; i < N; i++) {
-      var fullMask = unmoldMask(masks[i], boxes[i], originalImageShape);
+      var fullMask = await unmoldMask(masks[i], boxes[i], originalImageShape, saveMasks: saveMasks);
       fullMasks.add(fullMask);
     }
     return [boxes, classIDs, scores, fullMasks];
   }
 
-  detect(ImageExtender image) async {
+  detect(ImageExtender image, {saveMasks = false}) async {
     var mold = await moldInputs(ImageExtender.from(image));
 
     var anchors = [await getAnchors(mold["molded_images"]!.shape.sublist(1))];
@@ -131,12 +132,12 @@ class MaskRCNN {
     List detectionsList = detections.getDoubleList().reshape(outputShapes[3]);
     List mrcnnMaskList = mrcnnMask.getDoubleList().reshape(outputShapes[4]);
 
-    var unmold = unmoldDetections(
+    var unmold = await unmoldDetections(
         detectionsList[0],
         mrcnnMaskList[0],
         image.imageList.shape,
         mold["molded_images"]!.shape.sublist(1),
-        mold["windows"]![0]);
+        mold["windows"]![0], saveMasks: saveMasks);
 
     var result = {
       "rois": unmold[0],

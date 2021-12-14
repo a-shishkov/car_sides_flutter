@@ -14,6 +14,10 @@ import 'package:path_provider/path_provider.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'mrcnn/config.dart';
+import 'mrcnn/model.dart';
+import 'mrcnn/visualize.dart';
+
 List<CameraDescription> cameras = [];
 late tfl.Interpreter interpreter;
 late SharedPreferences prefs;
@@ -147,28 +151,49 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
       originalImagePath = originalIE.path!;
     });
 
-    ReceivePort receivePort = ReceivePort();
-    await Isolate.spawn(predictIsolate, receivePort.sendPort);
+    var result;
+    bool spawnIsolate = false;
+    if (spawnIsolate) {
+      ReceivePort receivePort = ReceivePort();
+      await Isolate.spawn(predictIsolate, receivePort.sendPort);
 
-    setState(() {
-      predictProgress = 0.4;
-    });
-    SendPort sendPort = await receivePort.first;
+      setState(() {
+        predictProgress = 0.4;
+      });
+      SendPort sendPort = await receivePort.first;
 
-    var msg = await sendReceive(sendPort,
-        IsolateMsg(originalIE, interpreterAddress: interpreter.address));
-    setState(() {
-      predictProgress = msg[0];
-    });
-    sendPort = msg[1];
+      var msg = await sendReceive(sendPort,
+          IsolateMsg(originalIE, interpreterAddress: interpreter.address));
+      setState(() {
+        predictProgress = msg[0];
+      });
+      sendPort = msg[1];
 
-    msg = await sendReceive(sendPort);
-    setState(() {
-      predictProgress = msg[0];
-    });
-    sendPort = msg[1];
+      msg = await sendReceive(sendPort);
+      setState(() {
+        predictProgress = msg[0];
+      });
+      sendPort = msg[1];
 
-    var result = await sendReceive(sendPort);
+      result = await sendReceive(sendPort);
+    } else {
+      var model = MaskRCNN(interpreter);
+      setState(() {
+        predictProgress = 0.5;
+      });
+      var r = await model.detect(originalIE, saveMasks: true);
+      setState(() {
+        predictProgress = 0.6;
+      });
+
+      result = IsolateMsg(null, foundInstances: r["class_ids"].length);
+      if (r["class_ids"].length > 0) {
+        var image = await displayInstances(originalIE, r["rois"], r["masks"],
+            r["class_ids"], CarPartsConfig.CLASS_NAMES,
+            scores: r["scores"], saveMasks: true);
+        result.image = image;
+      }
+    }
 
     setState(() {
       predictProgress = 0.7;

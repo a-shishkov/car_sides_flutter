@@ -46,7 +46,7 @@ class ImageExtender {
   }
 
   resize(width, height) {
-    image = ImagePackage.copyResize(image, width: width, height: height, interpolation: ImagePackage.Interpolation.average);
+    image = ImagePackage.copyResize(image, width: width, height: height, interpolation: ImagePackage.Interpolation.cubic);
   }
 
   rotate(num angle) async {

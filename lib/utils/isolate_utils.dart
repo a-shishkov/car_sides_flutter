@@ -5,7 +5,7 @@ import 'package:flutter_app/mrcnn/visualize.dart';
 import 'package:flutter_app/utils/image_extender.dart';
 
 class IsolateMsg {
-  ImageExtender image;
+  ImageExtender? image;
   int? interpreterAddress;
   int? foundInstances;
 
