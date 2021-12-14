@@ -63,13 +63,14 @@ displayInstances(ImageExtender originalImage, List boxes, List masks,
         ImagePackage.getColor(color.red, color.green, color.blue));
 
     var mask = masks[i];
-    ImageExtender maskIE = ImageExtender.fromImage(mask);
     if (saveMasks) {
+      ImageExtender maskIE = ImageExtender.fromImage(mask);
       await maskIE.saveToTempDir(
           "${originalImage.path!.split('/').last.split('.').first}_MASK_$i.jpg");
     }
     if (showMask) {
       if (saveMasks) {
+        ImageExtender maskIE = ImageExtender.fromImage(mask);
         var maskBytes = maskIE.imageList;
         var boolMask = List.generate(maskBytes.shape[0],
             (index) => List.generate(maskBytes.shape[1], (index) => false));
@@ -83,7 +84,8 @@ displayInstances(ImageExtender originalImage, List boxes, List masks,
         maskIE.resize(originalImage.width, originalImage.height);
         originalImage = applyMask(originalImage, boolMask, color);
       } else {
-        originalImage.image = ImagePackage.drawImage(originalImage.image, mask);
+        originalImage = applyMask(originalImage, mask, color);
+        // originalImage.image = ImagePackage.drawImage(originalImage.image, mask);
       }
     }
 

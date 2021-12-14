@@ -1,5 +1,6 @@
 import 'dart:math';
 import 'package:flutter_app/utils/image_extender.dart';
+import 'package:get/get.dart';
 import 'package:tflite_flutter/tflite_flutter.dart';
 import 'package:image/image.dart';
 import 'package:collection/collection.dart';
@@ -126,7 +127,7 @@ Future<Map> resizeImage(ImageExtender image,
   };
 }
 
-Future<Image> unmoldMask(List mask, bbox, imageShape, {saveMasks = false}) async{
+Future<List> unmoldMask(List mask, bbox, imageShape, {saveMasks = false}) async{
   var threshold = 0.5;
   int y1 = bbox[0];
   int x1 = bbox[1];
@@ -179,12 +180,22 @@ Future<Image> unmoldMask(List mask, bbox, imageShape, {saveMasks = false}) async
           (j) => (i >= y1 && i < y2 && j >= x1 && j < x2)
               ? binaryMask[i - y1][j - x1]
               : false));*/
-  var fullMask = Image.rgb(imageShape[1], imageShape[0]);
-  fullMask.channels = Channels.rgba;
-  fullMask = drawImage(fullMask, maskImage.image,
+  var fullMaskImage = Image.rgb(imageShape[1], imageShape[0]);
+  fullMaskImage.channels = Channels.rgba;
+  fullMaskImage = drawImage(fullMaskImage, maskImage.image,
       dstX: x1, dstY: y1, dstW: x2 - x1, dstH: y2 - y1);
+  var fullMask = ImageExtender.fromImage(fullMaskImage).imageList;
+  var boolMask = List.generate(fullMask.shape[0],
+          (index) => List.generate(fullMask.shape[1], (index) => false));
+  for (var i = 0; i < fullMask.shape[0]; i++) {
+    for (var j = 0; j < fullMask.shape[1]; j++) {
+      if ((fullMask[i][j] as List).first > threshold * 255) {
+        boolMask[i][j] = true;
+      }
+    }
+  }
 
-  return fullMask;
+  return boolMask;
 }
 
 // Anchors
