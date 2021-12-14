@@ -91,6 +91,8 @@ class MaskRCNN {
       }
     }
     boxes = denormBoxes(boxes, originalImageShape);
+
+    // Checking for similar results
     Function eq = const ListEquality().equals;
     var boxesOutput = [];
     var equals = false;
@@ -108,6 +110,7 @@ class MaskRCNN {
     }
     boxes = boxesOutput;
     N = boxes.length;
+
     List fullMasks = [];
     for (var i = 0; i < N; i++) {
       var fullMask = await unmoldMask(masks[i], boxes[i], originalImageShape);

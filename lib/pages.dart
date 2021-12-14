@@ -12,8 +12,8 @@ Widget cameraPage(
     0.0: "Nothing",
     0.1: "Taking picture",
     0.3: "Start prediction",
-    0.4: "Waiting for result",
     0.5: "Running model",
+    0.4: "Waiting for result",
     0.6: "Visualizing result",
     0.7: "Saving picture",
     0.9: "Done"
@@ -23,18 +23,22 @@ Widget cameraPage(
       color: Colors.black,
       child: !getImageRunning && controller.value.isInitialized
           ? CameraPreview(controller)
-          : Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-              CircularProgressIndicator(
-                value: predictProgress,
-              ),
-              SizedBox(
-                height: 10,
-              ),
-              Text(
-                progressMsg[predictProgress]!,
-                style: TextStyle(color: Colors.white),
-              ),
-            ]));
+          : !getImageRunning
+              ? Center(
+                  child: CircularProgressIndicator(),
+                )
+              : Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                  CircularProgressIndicator(
+                    value: predictProgress,
+                  ),
+                  SizedBox(
+                    height: 10,
+                  ),
+                  Text(
+                    progressMsg[predictProgress]!,
+                    style: TextStyle(color: Colors.white),
+                  ),
+                ]));
 }
 
 Widget mrcnnPage(newImagePath) {

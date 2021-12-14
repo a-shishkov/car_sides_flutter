@@ -13,11 +13,11 @@ class IsolateMsg {
 }
 
 Future<void> predictIsolate(SendPort sendPort) async {
-  var msg = await receiveSent(sendPort);
+  var msg = await receiveSend(sendPort);
   var data = msg[0];
   SendPort replyTo = msg[1];
 
-  ImageExtender image = data.image;
+  ImageExtender image = data.image!;
   var address = data.interpreterAddress;
 
   var model = MaskRCNN.fromAddress(address!);
@@ -34,7 +34,7 @@ Future<void> predictIsolate(SendPort sendPort) async {
   replyTo.send(IsolateMsg(image, foundInstances: r["class_ids"].length));
 }
 
-Future receiveSent(SendPort port) {
+Future receiveSend(SendPort port) {
   ReceivePort response = ReceivePort();
   port.send(response.sendPort);
   return response.first;

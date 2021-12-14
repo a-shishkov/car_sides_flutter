@@ -152,7 +152,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     });
 
     var result;
-    bool spawnIsolate = false;
+    bool spawnIsolate = true;
     if (spawnIsolate) {
       ReceivePort receivePort = ReceivePort();
       await Isolate.spawn(predictIsolate, receivePort.sendPort);
