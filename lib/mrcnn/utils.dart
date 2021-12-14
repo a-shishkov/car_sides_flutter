@@ -127,13 +127,13 @@ Future<Map> resizeImage(ImageExtender image,
   };
 }
 
-Future<List> unmoldMask(List mask, bbox, imageShape, {saveMasks = false}) async{
+Future<List> unmoldMask(List mask, bbox, imageShape) async {
   var threshold = 0.5;
   int y1 = bbox[0];
   int x1 = bbox[1];
   int y2 = bbox[2];
   int x2 = bbox[3];
-  // TODO: implement mask resize
+
   var pixelMask = List.generate(
       mask.shape[0],
       (i) => List.generate(mask.shape[1],
@@ -142,60 +142,18 @@ Future<List> unmoldMask(List mask, bbox, imageShape, {saveMasks = false}) async{
   var maskImage = ImageExtender.fromBytes(
       mask.shape[0], mask.shape[1], pixelMask.flatten());
 
-  if (saveMasks) {
-    await maskImage.saveToTempDir("original_mask_${y1}_${x1}_${y2}_$x2.png");
-  }
-
   var resizeScale = 1;
-  var origMask = maskImage;
   maskImage.resize((x2 - x1) * resizeScale, (y2 - y1) * resizeScale);
-  if (false) {
-    // maskImage.saveToTempDir(
-    //     "resized_${resizeScale}x_mask_${y1}_${x1}_${y2}_$x2.png");
-    for (var i = 1; i < 20; i++) {
-      maskImage = origMask;
-      var timeStart = DateTime.now().millisecondsSinceEpoch;
-      maskImage.resize((x2 - x1) * i, (y2 - y1) * i);
-      var timeElapsed =
-          DateTime.now().millisecondsSinceEpoch - timeStart;
-      await maskImage.saveToTempDir(
-          "resized_${i}x_${timeElapsed}_mask_${y1}_${x1}_${y2}_$x2.png");
-    }
-  }
-/*  mask = maskImage.imageList;
-  var binaryMask = [];
-  for (var i = 0; i < mask.shape[0]; i++) {
-    for (var j = 0; j < mask.shape[1]; j++) {
-      if ((mask[i][j] as List).first > threshold * 255)
-        binaryMask.add(true);
-      else
-        binaryMask.add(false);
-    }
-  }
-  binaryMask = binaryMask.reshape([mask.shape[0], mask.shape[1]]);
+  var maskBytes = maskImage.imageList;
   var fullMask = List.generate(
       imageShape[0],
       (i) => List.generate(
           imageShape[1],
           (j) => (i >= y1 && i < y2 && j >= x1 && j < x2)
-              ? binaryMask[i - y1][j - x1]
-              : false));*/
-  var fullMaskImage = Image.rgb(imageShape[1], imageShape[0]);
-  fullMaskImage.channels = Channels.rgba;
-  fullMaskImage = drawImage(fullMaskImage, maskImage.image,
-      dstX: x1, dstY: y1, dstW: x2 - x1, dstH: y2 - y1);
-  var fullMask = ImageExtender.fromImage(fullMaskImage).imageList;
-  var boolMask = List.generate(fullMask.shape[0],
-          (index) => List.generate(fullMask.shape[1], (index) => false));
-  for (var i = 0; i < fullMask.shape[0]; i++) {
-    for (var j = 0; j < fullMask.shape[1]; j++) {
-      if ((fullMask[i][j] as List).first > threshold * 255) {
-        boolMask[i][j] = true;
-      }
-    }
-  }
+              ? (maskBytes[i - y1][j - x1] as List).first >= threshold * 255
+              : false));
 
-  return boolMask;
+  return fullMask;
 }
 
 // Anchors

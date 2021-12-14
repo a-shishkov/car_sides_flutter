@@ -38,8 +38,7 @@ displayInstances(ImageExtender originalImage, List boxes, List masks,
     showMask = true,
     showBbox = true,
     colors,
-    captions,
-    saveMasks = false}) async {
+    captions}) async {
   if (boxes.isEmpty) {
     print("No instances to display");
     return;
@@ -63,30 +62,8 @@ displayInstances(ImageExtender originalImage, List boxes, List masks,
         ImagePackage.getColor(color.red, color.green, color.blue));
 
     var mask = masks[i];
-    if (saveMasks) {
-      ImageExtender maskIE = ImageExtender.fromImage(mask);
-      await maskIE.saveToTempDir(
-          "${originalImage.path!.split('/').last.split('.').first}_MASK_$i.jpg");
-    }
     if (showMask) {
-      if (saveMasks) {
-        ImageExtender maskIE = ImageExtender.fromImage(mask);
-        var maskBytes = maskIE.imageList;
-        var boolMask = List.generate(maskBytes.shape[0],
-            (index) => List.generate(maskBytes.shape[1], (index) => false));
-        for (var i = 0; i < maskBytes.shape[0]; i++) {
-          for (var j = 0; j < maskBytes.shape[1]; j++) {
-            if ((maskBytes[i][j] as List).first > 0.5 * 255) {
-              boolMask[i][j] = true;
-            }
-          }
-        }
-        maskIE.resize(originalImage.width, originalImage.height);
-        originalImage = applyMask(originalImage, boolMask, color);
-      } else {
-        originalImage = applyMask(originalImage, mask, color);
-        // originalImage.image = ImagePackage.drawImage(originalImage.image, mask);
-      }
+      originalImage = applyMask(originalImage, mask, color);
     }
 
     if (captions == null) {

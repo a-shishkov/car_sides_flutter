@@ -181,7 +181,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
       setState(() {
         predictProgress = 0.5;
       });
-      var r = await model.detect(originalIE, saveMasks: false);
+      var r = await model.detect(originalIE);
       setState(() {
         predictProgress = 0.6;
       });
@@ -190,7 +190,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
       if (r["class_ids"].length > 0) {
         var image = await displayInstances(originalIE, r["rois"], r["masks"],
             r["class_ids"], CarPartsConfig.CLASS_NAMES,
-            scores: r["scores"], saveMasks: false);
+            scores: r["scores"]);
         result.image = image;
       }
     }

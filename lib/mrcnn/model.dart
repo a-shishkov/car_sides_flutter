@@ -47,7 +47,7 @@ class MaskRCNN {
   }
 
   Future<List> unmoldDetections(
-      detections, List mrcnnMask, originalImageShape, imageShape, window, {saveMasks = false}) async{
+      detections, List mrcnnMask, originalImageShape, imageShape, window) async{
     var N = detections.length;
     for (var i = 0; i < detections.length; i++) {
       if (detections[i][4] == 0) {
@@ -110,13 +110,13 @@ class MaskRCNN {
     N = boxes.length;
     List fullMasks = [];
     for (var i = 0; i < N; i++) {
-      var fullMask = await unmoldMask(masks[i], boxes[i], originalImageShape, saveMasks: saveMasks);
+      var fullMask = await unmoldMask(masks[i], boxes[i], originalImageShape);
       fullMasks.add(fullMask);
     }
     return [boxes, classIDs, scores, fullMasks];
   }
 
-  detect(ImageExtender image, {saveMasks = false}) async {
+  detect(ImageExtender image) async {
     var mold = await moldInputs(ImageExtender.from(image));
 
     var anchors = [await getAnchors(mold["molded_images"]!.shape.sublist(1))];
@@ -137,7 +137,7 @@ class MaskRCNN {
         mrcnnMaskList[0],
         image.imageList.shape,
         mold["molded_images"]!.shape.sublist(1),
-        mold["windows"]![0], saveMasks: saveMasks);
+        mold["windows"]![0]);
 
     var result = {
       "rois": unmold[0],
