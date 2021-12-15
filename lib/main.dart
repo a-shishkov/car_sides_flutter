@@ -8,15 +8,12 @@ import 'package:flutter_app/pages.dart';
 import 'package:flutter_app/utils/image_extender.dart';
 import 'package:flutter_app/utils/isolate_utils.dart';
 import 'package:camera/camera.dart';
+import 'package:flutter_app/utils/prediction_result.dart';
 import 'package:loader_overlay/loader_overlay.dart';
 import 'package:tflite_flutter/tflite_flutter.dart' as tfl;
 import 'package:path_provider/path_provider.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-
-import 'mrcnn/config.dart';
-import 'mrcnn/model.dart';
-import 'mrcnn/visualize.dart';
 
 List<CameraDescription> cameras = [];
 late tfl.Interpreter interpreter;
@@ -26,7 +23,7 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   cameras = await availableCameras();
   prefs = await SharedPreferences.getInstance();
-  interpreter = await tfl.Interpreter.fromAsset('car_parts.tflite');
+  interpreter = await tfl.Interpreter.fromAsset('car_parts_smallest_fixed_anno.tflite');
 
   runApp(MyApp());
 }
@@ -63,6 +60,8 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   String? originalImagePath;
 
   bool getImageRunning = false;
+
+  PredictionResult? predictResult;
   double predictProgress = 0.0;
 
   int _selectedIndex = 0;
@@ -151,7 +150,6 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
       originalImagePath = originalIE.path!;
     });
 
-    var result;
     bool spawnIsolate = true;
     if (spawnIsolate) {
       ReceivePort receivePort = ReceivePort();
@@ -163,7 +161,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
       SendPort sendPort = await receivePort.first;
 
       var msg = await sendReceive(sendPort,
-          IsolateMsg(originalIE, interpreterAddress: interpreter.address));
+          IsolateMsg(originalIE, interpreter.address));
       setState(() {
         predictProgress = msg[0];
       });
@@ -175,37 +173,20 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
       });
       sendPort = msg[1];
 
-      result = await sendReceive(sendPort);
-    } else {
-      var model = MaskRCNN(interpreter);
-      setState(() {
-        predictProgress = 0.5;
-      });
-      var r = await model.detect(originalIE);
-      setState(() {
-        predictProgress = 0.6;
-      });
-
-      result = IsolateMsg(null, foundInstances: r["class_ids"].length);
-      if (r["class_ids"].length > 0) {
-        var image = await displayInstances(originalIE, r["rois"], r["masks"],
-            r["class_ids"], CarPartsConfig.CLASS_NAMES,
-            scores: r["scores"]);
-        result.image = image;
-      }
+      predictResult = await sendReceive(sendPort);
     }
 
     setState(() {
       predictProgress = 0.7;
     });
-    if (result.foundInstances > 0) {
+    if (predictResult != null) {
       var path =
           DateFormat('yyyyMMdd_HH_mm_ss').format(DateTime.now()) + '.png';
-      newImagePath = await result.image.saveToTempDir(path);
+      newImagePath = await predictResult!.image.saveToTempDir(path);
 
       bool? saveExternal = prefs.getBool('saveToDownloadDir');
       if (saveExternal != null && saveExternal) {
-        var imagePath = await result.image.saveToDownloadDir(path);
+        var imagePath = await predictResult!.image.saveToDownloadDir(path);
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text("Image saved to $imagePath"),
         ));
@@ -305,7 +286,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
       children: [
         cameraPage(
             predictProgress, getImageRunning, controller, originalImagePath),
-        mrcnnPage(newImagePath),
+        MrcnnPage(predictResult),
         SettingsPage(prefs)
       ],
     );

@@ -1,9 +1,7 @@
 import 'dart:math';
 import 'package:flutter_app/utils/image_extender.dart';
-import 'package:get/get.dart';
 import 'package:tflite_flutter/tflite_flutter.dart';
 import 'package:image/image.dart';
-import 'package:collection/collection.dart';
 
 List imageTo3DList(Image image) {
   List rgbImage = image.getBytes(format: Format.rgb);

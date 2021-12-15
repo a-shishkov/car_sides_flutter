@@ -1,10 +1,12 @@
 import 'dart:io';
-
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_app/utils/cache_folder_info.dart';
+import 'package:flutter_app/utils/prediction_result.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+import 'mrcnn/config.dart';
 
 Widget cameraPage(
     predictProgress, getImageRunning, controller, originalImagePath) {
@@ -41,10 +43,96 @@ Widget cameraPage(
                 ]));
 }
 
+class MrcnnPage extends StatelessWidget {
+  final PredictionResult? predictionResult;
+
+  const MrcnnPage(this.predictionResult, {Key? key}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    if (predictionResult != null &&
+        File(predictionResult!.image.path!).existsSync()) {
+      var path = predictionResult!.image.path;
+      var classIds = predictionResult!.classIds;
+      var boxes = predictionResult!.boxes;
+      var scores = predictionResult!.scores;
+
+      return Container(
+        child: ListView.builder(
+          itemCount: boxes.length + 1,
+          itemBuilder: (context, index) {
+            if (index == 0) {
+              return Image.file(File(path!));
+            } else {
+              var className = CarPartsConfig.CLASS_NAMES[classIds[index - 1]];
+              className = className[0].toUpperCase() + className.substring(1);
+
+              var score = (scores[index - 1] * 100).round();
+              return ListTile(
+                title: Text("$className"),
+                subtitle: Text(
+                    "(${boxes[index - 1][1]}, ${boxes[index - 1][0]}); (${boxes[index - 1][3]}, ${boxes[index - 1][2]})",
+                    style: TextStyle(color: Colors.black)),
+                trailing: Text("$score%"),
+              );
+            }
+          },
+        ),
+      );
+    } else {
+      return Container(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.image_not_supported,
+              size: 100,
+              color: Colors.grey,
+            ),
+            Text(
+              'Take a picture first',
+              style: TextStyle(color: Colors.grey),
+            ),
+          ],
+        ),
+      );
+    }
+  }
+}
+
 Widget mrcnnPage(newImagePath) {
   return Container(
       child: (newImagePath != null && File(newImagePath).existsSync()
-          ? Image.file(File(newImagePath!))
+          ? ListView(children: [
+              Image.file(File(newImagePath!)),
+              Container(
+                color: Colors.black,
+                child: Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        "Some info",
+                        style: TextStyle(color: Colors.white),
+                      ),
+                      Text(
+                        "Some info",
+                        style: TextStyle(color: Colors.white),
+                      ),
+                      Text(
+                        "Some info",
+                        style: TextStyle(color: Colors.white),
+                      ),
+                      Text(
+                        "Some info",
+                        style: TextStyle(color: Colors.white),
+                      )
+                    ],
+                  ),
+                ),
+              )
+            ])
           : Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [

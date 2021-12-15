@@ -3,13 +3,13 @@ import 'package:flutter_app/mrcnn/config.dart';
 import 'package:flutter_app/mrcnn/model.dart';
 import 'package:flutter_app/mrcnn/visualize.dart';
 import 'package:flutter_app/utils/image_extender.dart';
+import 'package:flutter_app/utils/prediction_result.dart';
 
 class IsolateMsg {
   ImageExtender? image;
   int? interpreterAddress;
-  int? foundInstances;
 
-  IsolateMsg(this.image, {this.interpreterAddress, this.foundInstances});
+  IsolateMsg(this.image, this.interpreterAddress);
 }
 
 Future<void> predictIsolate(SendPort sendPort) async {
@@ -26,12 +26,14 @@ Future<void> predictIsolate(SendPort sendPort) async {
   replyTo = await sendReceive(replyTo, 0.6);
 
   if (r["class_ids"].length > 0) {
-    image = await displayInstances(image, r["rois"], r["masks"],
-        r["class_ids"], CarPartsConfig.CLASS_NAMES,
+    image = await displayInstances(image, r["rois"], r["masks"], r["class_ids"],
+        CarPartsConfig.CLASS_NAMES,
         scores: r["scores"]);
+    replyTo.send(PredictionResult(
+        image, r["rois"], r["masks"], r["class_ids"], r["scores"]));
+  } else {
+    replyTo.send(null);
   }
-
-  replyTo.send(IsolateMsg(image, foundInstances: r["class_ids"].length));
 }
 
 Future receiveSend(SendPort port) {

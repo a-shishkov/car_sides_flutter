@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_app/mrcnn/utils.dart';
 import 'package:flutter_app/utils/image_extender.dart';
 import 'package:tflite_flutter/tflite_flutter.dart';
@@ -92,7 +91,7 @@ class MaskRCNN {
     }
     boxes = denormBoxes(boxes, originalImageShape);
 
-    // Checking for similar results
+    // Checking for simi lar results
     Function eq = const ListEquality().equals;
     var boxesOutput = [];
     var equals = false;
