@@ -22,25 +22,37 @@ Widget cameraPage(
   };
 
   return Container(
-      color: Colors.black,
-      child: !getImageRunning && controller.value.isInitialized
-          ? CameraPreview(controller)
-          : !getImageRunning
-              ? Center(
-                  child: CircularProgressIndicator(),
-                )
-              : Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                  CircularProgressIndicator(
-                    value: predictProgress,
+    color: Colors.black,
+    child: !getImageRunning && controller.value.isInitialized
+        ? CameraPreview(controller)
+        : !getImageRunning
+            ? Center(
+                child: CircularProgressIndicator(),
+              )
+            : Stack(alignment: AlignmentDirectional.center,
+                children: [
+                  Image.file(File(originalImagePath)),
+                  Container(
+                    width: double.infinity,
+                    color: Colors.white.withOpacity(0.2),
+                    child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          CircularProgressIndicator(
+                            value: predictProgress,
+                          ),
+                          SizedBox(
+                            height: 10,
+                          ),
+                          Text(
+                            progressMsg[predictProgress]!,
+                            style: TextStyle(color: Colors.white),
+                          ),
+                        ]),
                   ),
-                  SizedBox(
-                    height: 10,
-                  ),
-                  Text(
-                    progressMsg[predictProgress]!,
-                    style: TextStyle(color: Colors.white),
-                  ),
-                ]));
+                ],
+              ),
+  );
 }
 
 class MrcnnPage extends StatelessWidget {
@@ -62,7 +74,19 @@ class MrcnnPage extends StatelessWidget {
           itemCount: boxes.length + 1,
           itemBuilder: (context, index) {
             if (index == 0) {
-              return Image.file(File(path!));
+              return Stack(
+                  alignment: AlignmentDirectional.bottomCenter,
+                  children: [
+                    Image.file(File(path!)),
+                    Padding(
+                      padding: EdgeInsets.all(15),
+                      child: Icon(
+                        Icons.arrow_upward,
+                        color: Colors.white,
+                        size: 50,
+                      ),
+                    )
+                  ]);
             } else {
               var className = CarPartsConfig.CLASS_NAMES[classIds[index - 1]];
               className = className[0].toUpperCase() + className.substring(1);
