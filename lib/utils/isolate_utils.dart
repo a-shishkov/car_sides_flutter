@@ -26,7 +26,7 @@ Future<void> predictIsolate(SendPort sendPort) async {
   replyTo = await sendReceive(replyTo, 0.6);
 
   if (r["class_ids"].length > 0) {
-    image = await displayInstances(image, r["rois"], r["masks"], r["class_ids"],
+    image = displayInstances(image, r["rois"], r["masks"], r["class_ids"],
         CarPartsConfig.CLASS_NAMES,
         scores: r["scores"]);
     replyTo.send(PredictionResult(

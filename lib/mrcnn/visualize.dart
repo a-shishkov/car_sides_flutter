@@ -31,18 +31,18 @@ ImageExtender applyMask(ImageExtender maskedImage, List mask, Color color,
   return maskedImage;
 }
 
-displayInstances(ImageExtender originalImage, List boxes, List masks,
+ImageExtender displayInstances(ImageExtender originalImage, List boxes, List masks,
     List classIds, classNames,
     {scores,
     title,
     showMask = true,
     showBbox = true,
     colors,
-    captions}) async {
-  if (boxes.isEmpty) {
+    captions}) {
+/*  if (boxes.isEmpty) {
     print("No instances to display");
-    return;
-  }
+    return null;
+  }*/
   var N = boxes.shape[0];
   if (colors == null) {
     colors = randomColors(N);
@@ -61,7 +61,7 @@ displayInstances(ImageExtender originalImage, List boxes, List masks,
     originalImage.drawRect(x1, y1, x2, y2,
         ImagePackage.getColor(color.red, color.green, color.blue));
 
-    var mask = masks[i];
+    var mask = List.generate(masks.shape[0], (j) => List.generate(masks.shape[1], (k) => masks[j][k][i]));
     if (showMask) {
       originalImage = applyMask(originalImage, mask, color);
     }

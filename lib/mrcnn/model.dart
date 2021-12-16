@@ -115,7 +115,9 @@ class MaskRCNN {
       var fullMask = await unmoldMask(masks[i], boxes[i], originalImageShape);
       fullMasks.add(fullMask);
     }
-    return [boxes, classIDs, scores, fullMasks];
+    List stackedFullMask = List.generate(originalImageShape[0], (i) => List.generate(originalImageShape[1], (j) => List.generate(fullMasks.shape[0], (k) => fullMasks[k][i][j])));
+
+    return [boxes, classIDs, scores, stackedFullMask];
   }
 
   detect(ImageExtender image) async {

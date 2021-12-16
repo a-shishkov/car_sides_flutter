@@ -1,9 +1,13 @@
+import 'dart:convert';
 import 'dart:io';
 import 'dart:async';
 import 'dart:isolate';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/widgets.dart';
 import 'package:f_logs/f_logs.dart';
+import 'package:flutter_app/mrcnn/config.dart';
+import 'package:flutter_app/mrcnn/visualize.dart';
 import 'package:flutter_app/pages.dart';
 import 'package:flutter_app/utils/image_extender.dart';
 import 'package:flutter_app/utils/isolate_utils.dart';
@@ -19,11 +23,14 @@ List<CameraDescription> cameras = [];
 late tfl.Interpreter interpreter;
 late SharedPreferences prefs;
 
+enum WhereInference { device, server }
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   cameras = await availableCameras();
   prefs = await SharedPreferences.getInstance();
-  interpreter = await tfl.Interpreter.fromAsset('car_parts_smallest_fixed_anno.tflite');
+  interpreter =
+      await tfl.Interpreter.fromAsset('car_parts_smallest_fixed_anno.tflite');
 
   runApp(MyApp());
 }
@@ -59,10 +66,19 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   String? newImagePath;
   String? originalImagePath;
 
-  bool getImageRunning = false;
+  bool predictionRunning = false;
+  bool connected = false;
 
   PredictionResult? predictResult;
   double predictProgress = 0.0;
+
+  WhereInference? inferenceOn = WhereInference.device;
+  String serverIP = '193.2.231.155';
+  int serverPort = 65432;
+  Socket? socket;
+
+  var textControllerIP = TextEditingController();
+  var textControllerPort = TextEditingController();
 
   int _selectedIndex = 0;
   PageController pageController = PageController(
@@ -87,6 +103,9 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
+
+    textControllerIP.text = serverIP;
+    textControllerPort.text = serverPort.toString();
 
     initializeCameraController();
     WidgetsBinding.instance!.addObserver(this);
@@ -131,14 +150,14 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     return "";
   }
 
-  Future getImage() async {
-    if (!controller.value.isInitialized || getImageRunning) {
+  Future predictionDevice() async {
+    if (!controller.value.isInitialized || predictionRunning) {
       return;
     }
 
     setState(() {
       predictProgress = 0.1;
-      getImageRunning = true;
+      predictionRunning = true;
     });
 
     XFile file = await controller.takePicture();
@@ -160,8 +179,8 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
       });
       SendPort sendPort = await receivePort.first;
 
-      var msg = await sendReceive(sendPort,
-          IsolateMsg(originalIE, interpreter.address));
+      var msg = await sendReceive(
+          sendPort, IsolateMsg(originalIE, interpreter.address));
       setState(() {
         predictProgress = msg[0];
       });
@@ -203,8 +222,105 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     }
     setState(() {
       predictProgress = 1.0;
-      getImageRunning = false;
+      predictionRunning = false;
     });
+  }
+
+  predictionServer() async {
+    if (!controller.value.isInitialized || predictionRunning) {
+      return;
+    }
+    if (socket != null) {
+      predictionRunning = true;
+
+      XFile file = await controller.takePicture();
+
+      ImageExtender originalIE = ImageExtender.decodeImageFromPath(file.path);
+
+      setState(() {
+        predictProgress = 0.3;
+        originalImagePath = originalIE.path!;
+      });
+
+      // socket = await Socket.connect(serverIP, serverPort);
+      print(
+          'Connected to: ${socket!.remoteAddress.address}:${socket!.remotePort}');
+
+      String fullData = '';
+
+      socket!.listen(
+        (Uint8List data) async {
+          final serverResponse = String.fromCharCodes(data);
+
+          if (serverResponse[0] == '{') {
+            fullData = serverResponse;
+          } else {
+            fullData += serverResponse;
+          }
+
+          if (fullData[fullData.length - 1] == '}') {
+            var response = jsonDecode(fullData);
+            print("Server: ${response['response']}");
+            ImageExtender? image;
+            if (response['response'] == 'Results') {
+              image = displayInstances(
+                  originalIE,
+                  response['rois'],
+                  response['masks'],
+                  response['class_ids'],
+                  CarPartsConfig.CLASS_NAMES,
+                  scores: response['scores']);
+              var path =
+                  DateFormat('yyyyMMdd_HH_mm_ss').format(DateTime.now()) +
+                      '_server.png';
+              await image.saveToTempDir(path);
+
+              predictResult = PredictionResult(image, response['rois'],
+                  response['masks'], response['class_ids'], response['scores']);
+
+              setState(() {
+                predictProgress = 0.9;
+                _onItemTapped(1);
+              });
+            }
+          }
+        },
+
+        // handle errors
+        onError: (error) {
+          print(error);
+          socket!.destroy();
+
+          setState(() {
+            predictProgress = 1.0;
+            predictionRunning = false;
+          });
+        },
+
+        // handle server ending connection
+        onDone: () {
+          print('Server left.');
+          socket!.destroy();
+
+          setState(() {
+            predictProgress = 1.0;
+            predictionRunning = false;
+          });
+        },
+      );
+
+      var imageFile = File(originalIE.path!);
+      var fileBytes = imageFile.readAsBytesSync();
+
+      sendMessage(socket, fileBytes);
+    }
+  }
+
+  void sendMessage(socket, Uint8List message) {
+    var msgSize = ByteData(4);
+    msgSize.setInt32(0, message.length);
+    socket.add(msgSize.buffer.asUint8List());
+    socket.add(message);
   }
 
   @override
@@ -217,13 +333,16 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
           onWillPop: () => Future.sync(onWillPop), child: buildPageView()),
       bottomNavigationBar: Theme(
         data: ThemeData(
-          splashColor: getImageRunning ? Colors.transparent : null,
-          highlightColor: getImageRunning ? Colors.transparent : null,
+          splashColor: predictionRunning ? Colors.transparent : null,
+          highlightColor: predictionRunning ? Colors.transparent : null,
         ),
         child: BottomNavigationBar(
-          selectedItemColor:
-              getImageRunning ? Theme.of(context).colorScheme.background : null,
-          unselectedItemColor: getImageRunning ? Colors.grey[400] : null,
+          selectedItemColor: predictionRunning
+              ? Theme.of(context).colorScheme.background
+              : Theme.of(context).colorScheme.primary,
+          unselectedItemColor: predictionRunning
+              ? Colors.grey[400]
+              : Theme.of(context).colorScheme.background,
           items: [
             BottomNavigationBarItem(
               icon: Icon(Icons.camera),
@@ -242,9 +361,11 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
           onTap: _onItemTapped,
         ),
       ),
-      floatingActionButton: _selectedIndex == 0 && !getImageRunning
+      floatingActionButton: _selectedIndex == 0 && !predictionRunning
           ? FloatingActionButton(
-              onPressed: getImage,
+              onPressed: inferenceOn == WhereInference.device
+                  ? predictionDevice
+                  : predictionServer,
               tooltip: 'Pick Image',
               child: Icon(Icons.add_a_photo))
           : null,
@@ -284,10 +405,206 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
       physics: NeverScrollableScrollPhysics(),
       onPageChanged: _pageChanged,
       children: [
-        cameraPage(
-            predictProgress, getImageRunning, controller, originalImagePath),
+        cameraPage(),
         MrcnnPage(predictResult),
-        SettingsPage(prefs)
+        SettingsPage(prefs),
+      ],
+    );
+  }
+
+  Widget cameraPage() {
+    var progressMsg = {
+      0.0: "Nothing",
+      0.1: "Taking picture",
+      0.3: "Start prediction",
+      0.5: "Running model",
+      0.4: "Waiting for result",
+      0.6: "Visualizing result",
+      0.7: "Saving picture",
+      0.9: "Done"
+    };
+
+    if (!predictionRunning) {
+      if (controller.value.isInitialized) {
+        return Container(
+          color: Colors.black,
+          child: Stack(
+            alignment: AlignmentDirectional.topCenter,
+            children: [
+              CameraPreview(controller),
+              Container(
+                width: double.infinity,
+                // height: double.infinity,
+                color: Colors.white,
+                child: Row(
+                  children: [
+                    Flexible(
+                        child: RadioListTile(
+                            title: Text("Device"),
+                            value: WhereInference.device,
+                            groupValue: inferenceOn,
+                            onChanged: (WhereInference? value) {
+                              if (connected) {
+                                showDialog(
+                                    context: context,
+                                    builder: (context) => AlertDialog(
+                                          title:
+                                              Text("Disconnect from server?"),
+                                          actions: [
+                                            TextButton(
+                                                onPressed: () {
+                                                  inferenceOn =
+                                                      WhereInference.server;
+                                                  Navigator.pop(context);
+                                                },
+                                                child: Text("No")),
+                                            TextButton(
+                                                onPressed: () {
+                                                  socket!.destroy();
+                                                  setState(() {
+                                                    connected = false;
+                                                    inferenceOn =
+                                                        WhereInference.device;
+                                                  });
+                                                  Navigator.pop(context);
+                                                },
+                                                child: Text("Yes"))
+                                          ],
+                                        ));
+                              } else {
+                                setState(() {
+                                  inferenceOn = value;
+                                });
+                              }
+                            })),
+                    Flexible(
+                      child: RadioListTile(
+                          title: Text("Server"),
+                          subtitle: connected
+                              ? Text("Connected")
+                              : Text("Disconnected"),
+                          value: WhereInference.server,
+                          groupValue: inferenceOn,
+                          onChanged: (WhereInference? value) {
+                            setState(() {
+                              inferenceOn = value;
+                              showDialog(
+                                  context: context,
+                                  builder: (context) {
+                                    return connectAlertDialog();
+                                  });
+                            });
+                          }),
+                    ),
+                  ],
+                ),
+              )
+            ],
+          ),
+        );
+      } else {
+        return Container(
+          color: Colors.black,
+          child: Center(
+            child: CircularProgressIndicator(),
+          ),
+        );
+      }
+    } else if (originalImagePath != null) {
+      return Container(
+        color: Colors.black,
+        child: Stack(
+          alignment: AlignmentDirectional.center,
+          children: [
+            Image.file(File(originalImagePath!)),
+            Container(
+              width: 150,
+              height: 150,
+              // color: Colors.white.withOpacity(0.2),
+              decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.4),
+                  border: Border.all(
+                    color: Colors.transparent,
+                  ),
+                  borderRadius: BorderRadius.all(Radius.circular(20))),
+              child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    CircularProgressIndicator(
+                      value: predictProgress,
+                    ),
+                    SizedBox(
+                      height: 10,
+                    ),
+                    Text(
+                      progressMsg[predictProgress]!,
+                      style: TextStyle(color: Colors.white),
+                    ),
+                  ]),
+            ),
+          ],
+        ),
+      );
+    } else {
+      return Container(
+        color: Colors.black,
+        child: Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+  }
+
+  AlertDialog connectAlertDialog() {
+    return AlertDialog(
+      title: Text("Connect to server"),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TextField(
+            controller: textControllerIP,
+            decoration: InputDecoration(hintText: "Server IP"),
+            onChanged: (String value) {
+              serverIP = value;
+            },
+          ),
+          TextField(
+            controller: textControllerPort,
+            decoration: InputDecoration(hintText: "Server port"),
+            onChanged: (String value) {
+              serverPort = int.parse(value);
+            },
+          ),
+        ],
+      ),
+      actions: [
+        ElevatedButton(
+            onPressed: () {
+              setState(() {
+                inferenceOn = WhereInference.device;
+              });
+              Navigator.pop(context);
+            },
+            child: Text("Cancel")),
+        ElevatedButton(
+            onPressed: () async {
+              try {
+                socket = await Socket.connect(serverIP, serverPort,
+                    timeout: Duration(seconds: 5));
+                setState(() {
+                  connected = true;
+                });
+              } on SocketException {
+                setState(() {
+                  inferenceOn = WhereInference.device;
+                });
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                  content: Text("Can't connect to server"),
+                ));
+              }
+              Navigator.pop(context);
+            },
+            child: Text("OK"))
       ],
     );
   }

@@ -8,53 +8,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'mrcnn/config.dart';
 
-Widget cameraPage(
-    predictProgress, getImageRunning, controller, originalImagePath) {
-  var progressMsg = {
-    0.0: "Nothing",
-    0.1: "Taking picture",
-    0.3: "Start prediction",
-    0.5: "Running model",
-    0.4: "Waiting for result",
-    0.6: "Visualizing result",
-    0.7: "Saving picture",
-    0.9: "Done"
-  };
-
-  return Container(
-    color: Colors.black,
-    child: !getImageRunning && controller.value.isInitialized
-        ? CameraPreview(controller)
-        : !getImageRunning
-            ? Center(
-                child: CircularProgressIndicator(),
-              )
-            : Stack(alignment: AlignmentDirectional.center,
-                children: [
-                  Image.file(File(originalImagePath)),
-                  Container(
-                    width: double.infinity,
-                    color: Colors.white.withOpacity(0.2),
-                    child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          CircularProgressIndicator(
-                            value: predictProgress,
-                          ),
-                          SizedBox(
-                            height: 10,
-                          ),
-                          Text(
-                            progressMsg[predictProgress]!,
-                            style: TextStyle(color: Colors.white),
-                          ),
-                        ]),
-                  ),
-                ],
-              ),
-  );
-}
-
 class MrcnnPage extends StatelessWidget {
   final PredictionResult? predictionResult;
 
@@ -81,7 +34,7 @@ class MrcnnPage extends StatelessWidget {
                     Padding(
                       padding: EdgeInsets.all(15),
                       child: Icon(
-                        Icons.arrow_upward,
+                        Icons.keyboard_arrow_up_rounded,
                         color: Colors.white,
                         size: 50,
                       ),
@@ -122,55 +75,6 @@ class MrcnnPage extends StatelessWidget {
       );
     }
   }
-}
-
-Widget mrcnnPage(newImagePath) {
-  return Container(
-      child: (newImagePath != null && File(newImagePath).existsSync()
-          ? ListView(children: [
-              Image.file(File(newImagePath!)),
-              Container(
-                color: Colors.black,
-                child: Padding(
-                  padding: const EdgeInsets.all(8.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        "Some info",
-                        style: TextStyle(color: Colors.white),
-                      ),
-                      Text(
-                        "Some info",
-                        style: TextStyle(color: Colors.white),
-                      ),
-                      Text(
-                        "Some info",
-                        style: TextStyle(color: Colors.white),
-                      ),
-                      Text(
-                        "Some info",
-                        style: TextStyle(color: Colors.white),
-                      )
-                    ],
-                  ),
-                ),
-              )
-            ])
-          : Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  Icons.image_not_supported,
-                  size: 100,
-                  color: Colors.grey,
-                ),
-                Text(
-                  'Take a picture first',
-                  style: TextStyle(color: Colors.grey),
-                ),
-              ],
-            )));
 }
 
 class SettingsPage extends StatefulWidget {
