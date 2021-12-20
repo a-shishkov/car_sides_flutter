@@ -87,11 +87,15 @@ class SettingsPage extends StatefulWidget {
 
 class _SettingsPageState extends State<SettingsPage> {
   late bool saveImagesToDownloadDir;
+  late bool testPicture;
+
   String cacheDirInfo = "Calculating...";
 
   @override
   void initState() {
-    saveImagesToDownloadDir = widget.prefs.getBool('saveToDownloadDir') ?? false;
+    saveImagesToDownloadDir =
+        widget.prefs.getBool('saveToDownloadDir') ?? false;
+    testPicture = widget.prefs.getBool('testPicture') ?? false;
     super.initState();
   }
 
@@ -116,7 +120,20 @@ class _SettingsPageState extends State<SettingsPage> {
               },
               tileColor: Theme.of(context).colorScheme.surface,
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.all(Radius.circular(10))),
+                  borderRadius: BorderRadius.all(Radius.circular(0))),
+            ),
+            SwitchListTile(
+              title: Text('Show test picture instead of camera'),
+              value: testPicture,
+              onChanged: (bool value) {
+                widget.prefs.setBool('testPicture', value);
+                setState(() {
+                  testPicture = value;
+                });
+              },
+              tileColor: Theme.of(context).colorScheme.surface,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.all(Radius.circular(0))),
             ),
             FutureBuilder(
               future: cacheDirImagesSize(),
@@ -141,6 +158,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   subtitle: Text(cacheDirInfo),
                   onTap: () {
                     showDialog<String>(
+                      barrierDismissible: false,
                       context: context,
                       builder: (BuildContext context) => AlertDialog(
                         title: const Text('Delete files?'),
@@ -165,12 +183,11 @@ class _SettingsPageState extends State<SettingsPage> {
                           ),
                         ],
                       ),
-                      barrierDismissible: false,
                     );
                   },
                   tileColor: Theme.of(context).colorScheme.surface,
                   shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.all(Radius.circular(10))),
+                      borderRadius: BorderRadius.all(Radius.circular(0))),
                 );
               },
             ),
