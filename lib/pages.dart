@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_app/utils/cache_folder_info.dart';
@@ -48,8 +47,8 @@ class MrcnnPage extends StatelessWidget {
               return ListTile(
                 title: Text("$className"),
                 subtitle: Text(
-                    "(${boxes[index - 1][1]}, ${boxes[index - 1][0]}); (${boxes[index - 1][3]}, ${boxes[index - 1][2]})",
-                    style: TextStyle(color: Colors.black)),
+                  "(${boxes[index - 1][1]}, ${boxes[index - 1][0]}); (${boxes[index - 1][3]}, ${boxes[index - 1][2]})",
+                ),
                 trailing: Text("$score%"),
               );
             }
@@ -92,12 +91,7 @@ class _SettingsPageState extends State<SettingsPage> {
 
   @override
   void initState() {
-    bool? saveExternal = widget.prefs.getBool('saveToDownloadDir');
-    if (saveExternal == null) {
-      saveImagesToDownloadDir = false;
-    } else {
-      saveImagesToDownloadDir = saveExternal;
-    }
+    saveImagesToDownloadDir = widget.prefs.getBool('saveToDownloadDir') ?? false;
     super.initState();
   }
 
