@@ -18,6 +18,7 @@ import 'package:loader_overlay/loader_overlay.dart';
 import 'package:tflite_flutter/tflite_flutter.dart' as tfl;
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:regexed_validator/regexed_validator.dart';
 
 List<CameraDescription> cameras = [];
 late tfl.Interpreter interpreter;
@@ -63,10 +64,12 @@ class MyHomePage extends StatefulWidget {
 class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   late CameraController controller;
 
-  String? testImageName = 'car_800_552.jpg';
+  String? testImageName =
+      prefs.getString('selectedTestImage') ?? 'car_800_552.jpg';
   ImageExtender? originalIE;
 
   String? newImagePath;
+
   String? get originalImagePath {
     if (originalIE != null) {
       return originalIE!.path;
@@ -86,8 +89,11 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   int serverPort = 65432;
   Socket? socket;
 
-  var textControllerIP = TextEditingController();
-  var textControllerPort = TextEditingController();
+  TextEditingController textControllerIP = TextEditingController();
+  TextEditingController textControllerPort = TextEditingController();
+
+  bool validateIP = true;
+  bool validatePort = true;
 
   int _selectedIndex = 0;
   PageController pageController = PageController(
@@ -113,7 +119,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   void initState() {
     super.initState();
 
-    serverIP = (prefs.getString('serverIP') ?? '');
+    serverIP = prefs.getString('serverIP') ?? '';
 
     textControllerIP.text = serverIP;
     textControllerPort.text = serverPort.toString();
@@ -163,8 +169,9 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
 
   Future takePicture() async {
     var testPicture = prefs.getBool('testPicture') ?? false;
+    testImageName = prefs.getString('selectedTestImage') ?? testImageName;
+
     if (testPicture) {
-      print('testPicture true');
       final byteData = await rootBundle.load('assets/$testImageName');
       originalIE = ImageExtender.decodeImage(byteData.buffer
           .asUint8List(byteData.offsetInBytes, byteData.lengthInBytes));
@@ -440,8 +447,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     if (!predictionRunning) {
       setState(() {
         _selectedIndex = index;
-        pageController.animateToPage(index,
-            duration: Duration(milliseconds: 500), curve: Curves.ease);
+        pageController.jumpToPage(index);
       });
     }
   }
@@ -475,6 +481,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
 
     if (!predictionRunning) {
       if (prefs.getBool('testPicture') ?? false) {
+        testImageName = prefs.getString('selectedTestImage') ?? testImageName;
         return Container(
           color: Colors.black,
           child: Stack(
@@ -624,14 +631,16 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
         children: [
           TextField(
             controller: textControllerIP,
-            decoration: InputDecoration(hintText: "Server IP"),
+            decoration: InputDecoration(
+                labelText: "Server IP",
+                errorText: validateIP ? null : "Wrong IP"),
             onChanged: (String value) {
               serverIP = value;
             },
           ),
           TextField(
             controller: textControllerPort,
-            decoration: InputDecoration(hintText: "Server port"),
+            decoration: InputDecoration(labelText: "Server port"),
             onChanged: (String value) {
               serverPort = int.parse(value);
             },
@@ -649,23 +658,33 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
             child: Text("Cancel")),
         TextButton(
             onPressed: () async {
-              try {
-                socket = await Socket.connect(serverIP, serverPort,
-                    timeout: Duration(seconds: 5));
-                prefs.setString('serverIP', serverIP);
-                listenSocket();
+              print("validator ${validator.ip(textControllerIP.text)}");
+              if (!validator.ip(textControllerIP.text)) {
                 setState(() {
-                  connected = true;
+                  validateIP = false;
                 });
-              } on SocketException {
+              } else {
                 setState(() {
-                  inferenceOn = WhereInference.device;
+                  validateIP = true;
                 });
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                  content: Text("Can't connect to server"),
-                ));
+                try {
+                  socket = await Socket.connect(serverIP, serverPort,
+                      timeout: Duration(seconds: 5));
+                  prefs.setString('serverIP', serverIP);
+                  listenSocket();
+                  setState(() {
+                    connected = true;
+                  });
+                } on SocketException {
+                  setState(() {
+                    inferenceOn = WhereInference.device;
+                  });
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                    content: Text("Can't connect to server"),
+                  ));
+                }
+                Navigator.pop(context);
               }
-              Navigator.pop(context);
             },
             child: Text("OK"))
       ],

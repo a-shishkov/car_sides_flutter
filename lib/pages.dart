@@ -86,17 +86,23 @@ class SettingsPage extends StatefulWidget {
 }
 
 class _SettingsPageState extends State<SettingsPage> {
-  late bool saveImagesToDownloadDir;
-  late bool testPicture;
+  late bool saveImagesToDownloadDir =
+      widget.prefs.getBool('saveToDownloadDir') ?? false;
+  late bool testPicture = widget.prefs.getBool('testPicture') ?? false;
+
+  late String selectedTestImage =
+      widget.prefs.getString('selectedTestImage') ?? dropdownItems[0].value!;
 
   String cacheDirInfo = "Calculating...";
 
-  @override
-  void initState() {
-    saveImagesToDownloadDir =
-        widget.prefs.getBool('saveToDownloadDir') ?? false;
-    testPicture = widget.prefs.getBool('testPicture') ?? false;
-    super.initState();
+  List<DropdownMenuItem<String>> get dropdownItems {
+    List<DropdownMenuItem<String>> menuItems = [
+      DropdownMenuItem(
+          child: Text("car_800_552.jpg"), value: "car_800_552.jpg"),
+      DropdownMenuItem(
+          child: Text("car_1024_1024.jpg"), value: "car_1024_1024.jpg"),
+    ];
+    return menuItems;
   }
 
   @override
@@ -131,6 +137,24 @@ class _SettingsPageState extends State<SettingsPage> {
                   testPicture = value;
                 });
               },
+              tileColor: Theme.of(context).colorScheme.surface,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.all(Radius.circular(0))),
+            ),
+            ListTile(
+              title: Text("Example image"),
+              trailing: DropdownButton(
+                value: selectedTestImage,
+                items: dropdownItems,
+                onChanged: testPicture
+                    ? (String? value) {
+                        widget.prefs.setString('selectedTestImage', value!);
+                        setState(() {
+                          selectedTestImage = value;
+                        });
+                      }
+                    : null,
+              ),
               tileColor: Theme.of(context).colorScheme.surface,
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.all(Radius.circular(0))),

@@ -45,7 +45,6 @@ Future<Map> resizeImage(ImageExtender image,
   }
 
   if (mode == "square") {
-    assert(max(h, w) == h);
 
     var ratio = h / maxDim;
     int newWidth = w ~/ ratio;
