@@ -1,5 +1,7 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_app/utils/cache_folder_info.dart';
 import 'package:flutter_app/utils/prediction_result.dart';
@@ -120,18 +122,14 @@ class _SettingsPageState extends State<SettingsPage> {
   late bool testPicture = widget.prefs.getBool('testPicture') ?? false;
 
   late String selectedTestImage =
-      widget.prefs.getString('selectedTestImage') ?? dropdownItems[0].value!;
+      widget.prefs.getString('selectedTestImage') ?? 'car_800_552.jpg';
 
   String cacheDirInfo = "Calculating...";
 
-  List<DropdownMenuItem<String>> get dropdownItems {
-    List<DropdownMenuItem<String>> menuItems = [
-      DropdownMenuItem(
-          child: Text("car_800_552.jpg"), value: "car_800_552.jpg"),
-      DropdownMenuItem(
-          child: Text("car_1024_1024.jpg"), value: "car_1024_1024.jpg"),
-    ];
-    return menuItems;
+  @override
+  void initState() {
+    // _initImages();
+    super.initState();
   }
 
   @override
@@ -170,27 +168,10 @@ class _SettingsPageState extends State<SettingsPage> {
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.all(Radius.circular(0))),
             ),
-            ListTile(
-              title: Text("Example image"),
-              trailing: DropdownButton(
-                value: selectedTestImage,
-                items: dropdownItems,
-                onChanged: testPicture
-                    ? (String? value) {
-                        widget.prefs.setString('selectedTestImage', value!);
-                        setState(() {
-                          selectedTestImage = value;
-                        });
-                      }
-                    : null,
-              ),
-              tileColor: Theme.of(context).colorScheme.surface,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.all(Radius.circular(0))),
-            ),
             FutureBuilder(
               future: cacheDirImagesSize(),
               builder: (context, snapshot) {
+                cacheDirInfo = widget.prefs.getString('cacheDirInfo') ?? 'Calculating...';
                 if (snapshot.connectionState == ConnectionState.done) {
                   if (snapshot.data.toString() == "0 items") {
                     deleteEnabled = false;
@@ -198,6 +179,7 @@ class _SettingsPageState extends State<SettingsPage> {
                     deleteEnabled = true;
                   }
                   cacheDirInfo = snapshot.data.toString();
+                  widget.prefs.setString('cacheDirInfo', snapshot.data.toString());
                 }
                 return ListTile(
                   enabled: deleteEnabled,

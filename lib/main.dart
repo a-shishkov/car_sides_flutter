@@ -64,7 +64,7 @@ class MyHomePage extends StatefulWidget {
 class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   late CameraController controller;
 
-  String? testImageName =
+  String? selectedTestImage =
       prefs.getString('selectedTestImage') ?? 'car_800_552.jpg';
   ImageExtender? originalIE;
 
@@ -126,6 +126,8 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
 
     initializeCameraController();
     WidgetsBinding.instance!.addObserver(this);
+
+    initImages();
   }
 
   @override
@@ -158,6 +160,30 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     }
   }
 
+  Future initImages() async {
+    final manifestContent = await rootBundle.loadString('AssetManifest.json');
+
+    final Map<String, dynamic> manifestMap = json.decode(manifestContent);
+
+    var imagePaths = manifestMap.keys
+        .where((String key) => key.contains('images/'))
+        .toList();
+
+    imagePaths = List.generate(
+        imagePaths.length, (index) => imagePaths[index].split('/').last);
+
+    List<DropdownMenuItem<String>> dropdownItems = List.generate(
+        imagePaths.length,
+        (index) => DropdownMenuItem(
+              child: Text(index.toString()),
+              value: imagePaths[index],
+            ));
+
+    await prefs.setStringList('testImagesList', imagePaths);
+
+    setState(() {});
+  }
+
   Future saveExternal(String path) async {
     if (prefs.getBool('saveToDownloadDir') ?? false) {
       var imagePath = await predictResult!.image.saveToDownloadDir(path);
@@ -169,13 +195,15 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
 
   Future takePicture() async {
     var testPicture = prefs.getBool('testPicture') ?? false;
-    testImageName = prefs.getString('selectedTestImage') ?? testImageName;
+    selectedTestImage =
+        prefs.getString('selectedTestImage') ?? selectedTestImage;
 
     if (testPicture) {
-      final byteData = await rootBundle.load('assets/images/$testImageName');
+      final byteData =
+          await rootBundle.load('assets/images/$selectedTestImage');
       originalIE = ImageExtender.decodeImage(byteData.buffer
           .asUint8List(byteData.offsetInBytes, byteData.lengthInBytes));
-      await originalIE!.saveToTempDir(testImageName);
+      await originalIE!.saveToTempDir(selectedTestImage);
     } else {
       XFile file = await controller.takePicture();
       originalIE = ImageExtender.decodeImageFromPath(file.path);
@@ -481,14 +509,40 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
 
     if (!predictionRunning) {
       if (prefs.getBool('testPicture') ?? false) {
-        testImageName = prefs.getString('selectedTestImage') ?? testImageName;
+        selectedTestImage =
+            prefs.getString('selectedTestImage') ?? selectedTestImage;
+        final testImages = prefs.getStringList('testImagesList') ?? [];
+        final List<DropdownMenuItem<String>> dropdownItems = List.generate(
+            testImages.length,
+            (index) => DropdownMenuItem(
+                  child: Text(index.toString()),
+                  value: testImages[index],
+                ));
         return Container(
           color: Colors.black,
           child: Stack(
             alignment: AlignmentDirectional.topCenter,
             children: [
-              Center(child: Image.asset('assets/images/$testImageName')),
-              deviceServerContainer(),
+              Center(child: Image.asset('assets/images/$selectedTestImage')),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  deviceServerContainer(),
+                  Padding(
+                    padding: const EdgeInsets.only(left: 16.0),
+                    child: DropdownButton(
+                      value: selectedTestImage,
+                      items: dropdownItems,
+                      onChanged: (String? value) {
+                        prefs.setString('selectedTestImage', value!);
+                        setState(() {
+                          selectedTestImage = value;
+                        });
+                      },
+                    ),
+                  )
+                ],
+              ),
             ],
           ),
         );
