@@ -4,7 +4,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_app/utils/cache_folder_info.dart';
 import 'package:flutter_app/utils/prediction_result.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-
+import 'package:photo_view/photo_view.dart';
 import 'mrcnn/config.dart';
 
 class MrcnnPage extends StatelessWidget {
@@ -16,7 +16,7 @@ class MrcnnPage extends StatelessWidget {
   Widget build(BuildContext context) {
     if (predictionResult != null &&
         File(predictionResult!.image.path!).existsSync()) {
-      var path = predictionResult!.image.path;
+      var path = predictionResult!.image.path!;
       var classIds = predictionResult!.classIds;
       var boxes = predictionResult!.boxes;
       var scores = predictionResult!.scores;
@@ -29,7 +29,15 @@ class MrcnnPage extends StatelessWidget {
               return Stack(
                   alignment: AlignmentDirectional.bottomCenter,
                   children: [
-                    Image.file(File(path!)),
+                    GestureDetector(
+                        onTap: () {
+                          Navigator.push(context,
+                              MaterialPageRoute(builder: (context) {
+                            return MrcnnImage(path);
+                          }));
+                        },
+                        child: Hero(
+                            tag: 'ImageHero', child: Image.file(File(path)))),
                     Padding(
                       padding: EdgeInsets.all(15),
                       child: Icon(
@@ -73,6 +81,27 @@ class MrcnnPage extends StatelessWidget {
         ),
       );
     }
+  }
+}
+
+class MrcnnImage extends StatelessWidget {
+  final String path;
+
+  const MrcnnImage(this.path, {Key? key}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () {
+        Navigator.pop(context);
+      },
+      child: PhotoView(
+        imageProvider: FileImage(File(path)),
+        minScale: PhotoViewComputedScale.contained,
+        maxScale: PhotoViewComputedScale.covered * 4,
+        heroAttributes: const PhotoViewHeroAttributes(tag: 'ImageHero'),
+      ),
+    );
   }
 }
 

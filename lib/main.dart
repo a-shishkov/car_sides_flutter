@@ -172,7 +172,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     testImageName = prefs.getString('selectedTestImage') ?? testImageName;
 
     if (testPicture) {
-      final byteData = await rootBundle.load('assets/$testImageName');
+      final byteData = await rootBundle.load('assets/images/$testImageName');
       originalIE = ImageExtender.decodeImage(byteData.buffer
           .asUint8List(byteData.offsetInBytes, byteData.lengthInBytes));
       await originalIE!.saveToTempDir(testImageName);
@@ -487,7 +487,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
           child: Stack(
             alignment: AlignmentDirectional.topCenter,
             children: [
-              Center(child: Image.asset('assets/$testImageName')),
+              Center(child: Image.asset('assets/images/$testImageName')),
               deviceServerContainer(),
             ],
           ),
