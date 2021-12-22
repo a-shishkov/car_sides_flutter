@@ -31,14 +31,14 @@ ImageExtender applyMask(ImageExtender maskedImage, List mask, Color color,
   return maskedImage;
 }
 
-ImageExtender displayInstances(ImageExtender originalImage, List boxes, List masks,
+Future<ImageExtender> displayInstances(ImageExtender originalImage, List boxes, List masks,
     List classIds, classNames,
     {scores,
     title,
     showMask = true,
     showBbox = true,
     colors,
-    captions}) {
+    captions}) async{
 /*  if (boxes.isEmpty) {
     print("No instances to display");
     return null;

@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:async';
 import 'dart:isolate';
 import 'dart:typed_data';
+import 'package:filesize/filesize.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
@@ -88,6 +89,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   String serverIP = '';
   int serverPort = 65432;
   Socket? socket;
+  int resultSize = 0;
 
   TextEditingController textControllerIP = TextEditingController();
   TextEditingController textControllerPort = TextEditingController();
@@ -168,13 +170,6 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
 
     imagePaths = List.generate(
         imagePaths.length, (index) => imagePaths[index].split('/').last);
-
-    List<DropdownMenuItem<String>> dropdownItems = List.generate(
-        imagePaths.length,
-        (index) => DropdownMenuItem(
-              child: Text(index.toString()),
-              value: imagePaths[index],
-            ));
 
     await prefs.setStringList('testImagesList', imagePaths);
 
@@ -289,78 +284,107 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     }
   }
 
+  processResponse(String message) async {
+    var response = jsonDecode(message);
+    print("Server: ${response['response']}");
+
+    if (response['response'] == 'Downloaded') {
+      setState(() {
+        predictProgress = 0.5;
+      });
+    }
+    else if (response['response'] == 'Sending') {
+      setState(() {
+        resultSize = response['size'];
+        predictProgress = 0.55;
+      });
+      print("Downloading ${response['size']} bytes");
+    }else if (response['response'] == 'Error') {
+      socket!.destroy();
+
+      setState(() {
+        originalIE = null;
+        inferenceOn = WhereInference.device;
+        connected = false;
+        predictionRunning = false;
+      });
+    } else if (response['response'] == 'Results') {
+      ImageExtender? image;
+
+      if (response['class_ids'].length > 0) {
+        setState(() {
+          predictProgress = 1.0;
+        });
+        print("displayInstances");
+        image = await displayInstances(
+            originalIE!,
+            response['rois'],
+            response['masks'],
+            response['class_ids'],
+            CarPartsConfig.CLASS_NAMES,
+            scores: response['scores']);
+
+        setState(() {
+          predictProgress = 0.7;
+        });
+        var path = DateFormat('yyyyMMdd_HH_mm_ss').format(DateTime.now()) +
+            '_server.png';
+        await image.saveToTempDir(path);
+
+        predictResult = PredictionResult.fromResult(image, response);
+
+        await saveExternal(path);
+      } else {
+        predictResult = null;
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: const Text('No instances found'),
+        ));
+      }
+      setState(() {
+        predictProgress = 1.0;
+        predictionRunning = false;
+        if (predictResult != null) {
+          _onItemTapped(1);
+        }
+      });
+    }
+  }
+
   void listenSocket() {
     print(
         'Connected to: ${socket!.remoteAddress.address}:${socket!.remotePort}');
 
-    String fullData = '';
+    bool firstMessage = true;
+    int readLen = 0;
+    int msgLen = 0;
+    String msg = '';
 
     socket!.listen(
       (Uint8List data) async {
-        print('Got answer');
-        final serverResponse = String.fromCharCodes(data);
+        while (true) {
+          if (firstMessage) {
+            readLen = 0;
+            msg = '';
+            msgLen = ByteData.view(data.sublist(0, 4).buffer)
+                .getInt32(0, Endian.big);
+            data = data.sublist(4, data.length);
+            firstMessage = false;
+          }
 
-        if (serverResponse[0] == '{') {
-          fullData = serverResponse;
-          print('Answer beginning');
-        } else {
-          fullData += serverResponse;
-        }
+          if (data.length + readLen < msgLen) {
+            msg += String.fromCharCodes(data);
+            readLen += data.length;
+            break;
+          } else {
+            msg += String.fromCharCodes(data, 0, msgLen - readLen);
 
-        if (fullData[fullData.length - 1] == '}') {
-          print('Answer END');
-          var response = jsonDecode(fullData);
-          print("Server: ${response['response']}");
+            await processResponse(msg);
 
-          if (response['response'] == 'Downloaded') {
-            setState(() {
-              predictProgress = 0.5;
-            });
-          } else if (response['response'] == 'Error') {
-            socket!.destroy();
-
-            setState(() {
-              originalIE = null;
-              inferenceOn = WhereInference.device;
-              connected = false;
-              predictionRunning = false;
-            });
-          } else if (response['response'] == 'Results') {
-            ImageExtender? image;
-
-            if (response['class_ids'].length > 0) {
-              image = displayInstances(
-                  originalIE!,
-                  response['rois'],
-                  response['masks'],
-                  response['class_ids'],
-                  CarPartsConfig.CLASS_NAMES,
-                  scores: response['scores']);
-
-              setState(() {
-                predictProgress = 0.7;
-              });
-              var path =
-                  DateFormat('yyyyMMdd_HH_mm_ss').format(DateTime.now()) +
-                      '_server.png';
-              await image.saveToTempDir(path);
-
-              predictResult = PredictionResult.fromResult(image, response);
-
-              await saveExternal(path);
-            } else {
-              predictResult = null;
-              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                content: const Text('No instances found'),
-              ));
+            firstMessage = true;
+            if (data.length + readLen == msgLen) {
+              break;
             }
-            setState(() {
-              predictProgress = 1.0;
-              predictionRunning = false;
-              if (predictResult != null) {
-                _onItemTapped(1);
-              }
-            });
+            data = data.sublist(msgLen);
           }
         }
       },
@@ -498,6 +522,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
       0.3: "Start prediction",
       0.4: "Waiting for result",
       0.5: "Running model",
+      0.55: "Receiving result\n(${filesize(resultSize)})",
       0.6: "Visualizing result",
       0.7: "Saving picture",
       0.9: "Rendering picture",
