@@ -92,9 +92,6 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   TextEditingController textControllerIP = TextEditingController();
   TextEditingController textControllerPort = TextEditingController();
 
-  bool validateIP = true;
-  bool validatePort = true;
-
   int _selectedIndex = 0;
   PageController pageController = PageController(
     initialPage: 0,
@@ -660,16 +657,17 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
                 subtitle: connected ? Text("Connected") : Text("Disconnected"),
                 value: WhereInference.server,
                 groupValue: inferenceOn,
-                onChanged: (WhereInference? value) {
+                onChanged: (WhereInference? value) async {
                   setState(() {
                     inferenceOn = value;
                   });
-                  showDialog(
+                  await showDialog(
                       barrierDismissible: false,
                       context: context,
                       builder: (context) {
                         return connectAlertDialog();
                       });
+                  setState(() {});
                 }),
           ),
         ],
@@ -677,71 +675,107 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     );
   }
 
-  AlertDialog connectAlertDialog() {
-    return AlertDialog(
-      title: Text("Connect to server"),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          TextField(
-            controller: textControllerIP,
-            decoration: InputDecoration(
-                labelText: "Server IP",
-                errorText: validateIP ? null : "Wrong IP"),
-            onChanged: (String value) {
-              serverIP = value;
-            },
-          ),
-          TextField(
-            controller: textControllerPort,
-            decoration: InputDecoration(labelText: "Server port"),
-            onChanged: (String value) {
-              serverPort = int.parse(value);
-            },
-          ),
-        ],
-      ),
-      actions: [
-        TextButton(
-            onPressed: () {
-              setState(() {
-                inferenceOn = WhereInference.device;
-              });
-              Navigator.pop(context);
-            },
-            child: Text("Cancel")),
-        TextButton(
-            onPressed: () async {
-              print("validator ${validator.ip(textControllerIP.text)}");
-              if (!validator.ip(textControllerIP.text)) {
-                setState(() {
-                  validateIP = false;
-                });
-              } else {
-                setState(() {
-                  validateIP = true;
-                });
-                try {
-                  socket = await Socket.connect(serverIP, serverPort,
-                      timeout: Duration(seconds: 5));
-                  prefs.setString('serverIP', serverIP);
-                  listenSocket();
+  Widget connectAlertDialog() {
+    bool connecting = false;
+    bool validateIP = true;
+    bool validatePort = true;
+
+    return StatefulBuilder(builder: (context, setState) {
+      return AlertDialog(
+        title: connecting
+            ? Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text("Connect to server"),
+                  SizedBox(
+                      width: 20, height: 20, child: CircularProgressIndicator())
+                ],
+              )
+            : Text("Connect to server"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: textControllerIP,
+              decoration: InputDecoration(
+                  labelText: "Server IP",
+                  errorText: validateIP ? null : "Wrong IP"),
+              onChanged: (String value) {
+                if (!validateIP) {
                   setState(() {
-                    connected = true;
+                    validateIP = validator.ip(textControllerIP.text);
                   });
-                } on SocketException {
-                  setState(() {
-                    inferenceOn = WhereInference.device;
-                  });
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                    content: Text("Can't connect to server"),
-                  ));
                 }
-                Navigator.pop(context);
-              }
-            },
-            child: Text("OK"))
-      ],
-    );
+                serverIP = value;
+              },
+            ),
+            TextField(
+              controller: textControllerPort,
+              decoration: InputDecoration(
+                  labelText: "Server port",
+                  errorText: validatePort ? null : "Wrong port"),
+              onChanged: (String value) {
+                try {
+                  serverPort = int.parse(value);
+                  setState(() {
+                    validatePort = true;
+                  });
+                } on FormatException {
+                  setState(() {
+                    validatePort = false;
+                  });
+                }
+              },
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+              onPressed: connecting
+                  ? null
+                  : () {
+                      setState(() {
+                        inferenceOn = WhereInference.device;
+                      });
+                      Navigator.pop(context);
+                    },
+              child: Text("Cancel")),
+          TextButton(
+              onPressed: connecting
+                  ? null
+                  : () async {
+                      print("validator ${validator.ip(textControllerIP.text)}");
+                      if (!validator.ip(textControllerIP.text)) {
+                        setState(() {
+                          validateIP = false;
+                        });
+                      } else {
+                        setState(() {
+                          validateIP = true;
+                          connecting = true;
+                        });
+
+                        try {
+                          socket = await Socket.connect(serverIP, serverPort,
+                              timeout: Duration(seconds: 5));
+                          prefs.setString('serverIP', serverIP);
+                          listenSocket();
+
+                          connected = true;
+                          connecting = false;
+                        } on SocketException {
+                          inferenceOn = WhereInference.device;
+                          connecting = false;
+                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                            content: Text("Can't connect to server"),
+                          ));
+                        }
+                        Navigator.pop(context);
+                      }
+                    },
+              child: Text("OK"))
+        ],
+      );
+    });
   }
 }
