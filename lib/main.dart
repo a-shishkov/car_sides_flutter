@@ -88,8 +88,9 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   WhereInference? inferenceOn = WhereInference.device;
   String serverIP = '';
   int serverPort = 65432;
-  Socket? socket;
+  late Socket socket;
   int resultSize = 0;
+  Map lastResponse = Map();
 
   TextEditingController textControllerIP = TextEditingController();
   TextEditingController textControllerPort = TextEditingController();
@@ -132,9 +133,8 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   @override
   void dispose() {
     controller.dispose();
-    if (socket != null) {
-      socket!.close();
-    }
+    socket.close();
+
     WidgetsBinding.instance!.removeObserver(this);
     super.dispose();
   }
@@ -284,62 +284,87 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     }
   }
 
-  processResponse(String message) async {
-    var response = jsonDecode(message);
-    print("Server: ${response['response']}");
+  processResponse(List<int> message) async {
+    if (lastResponse['response'] != 'NoMasksResults') {
+      lastResponse = jsonDecode(String.fromCharCodes(message));
+      print("Server: ${lastResponse['response']}");
 
-    if (response['response'] == 'Downloaded') {
-      setState(() {
-        predictProgress = 0.5;
-      });
-    }
-    else if (response['response'] == 'Sending') {
-      setState(() {
-        resultSize = response['size'];
-        predictProgress = 0.55;
-      });
-      print("Downloading ${response['size']} bytes");
-    }else if (response['response'] == 'Error') {
-      socket!.destroy();
+      if (lastResponse['response'] == 'Downloaded') {
+        setState(() {
+          predictProgress = 0.5;
+        });
+      } else if (lastResponse['response'] == 'Sending') {
+        setState(() {
+          resultSize = lastResponse['size'];
+          predictProgress = 0.55;
+        });
+        print("Downloading ${lastResponse['size']} bytes");
+      } else if (lastResponse['response'] == 'Error') {
+        socket!.destroy();
 
-      setState(() {
-        originalIE = null;
-        inferenceOn = WhereInference.device;
-        connected = false;
-        predictionRunning = false;
-      });
-    } else if (response['response'] == 'Results') {
-      ImageExtender? image;
+        setState(() {
+          originalIE = null;
+          inferenceOn = WhereInference.device;
+          connected = false;
+          predictionRunning = false;
+        });
+      } else if (lastResponse['response'] == 'MasksResults') {
+        ImageExtender? image;
 
-      if (response['class_ids'].length > 0) {
+        if (lastResponse['class_ids'].length > 0) {
+          setState(() {
+            predictProgress = 1.0;
+          });
+          image = await displayInstances(
+              originalIE!,
+              lastResponse['rois'],
+              lastResponse['masks'],
+              lastResponse['class_ids'],
+              CarPartsConfig.CLASS_NAMES,
+              scores: lastResponse['scores']);
+
+          setState(() {
+            predictProgress = 0.7;
+          });
+          var path = DateFormat('yyyyMMdd_HH_mm_ss').format(DateTime.now()) +
+              '_server.png';
+          await image.saveToTempDir(path);
+
+          predictResult = PredictionResult.fromResult(image, lastResponse);
+
+          await saveExternal(path);
+        } else {
+          predictResult = null;
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: const Text('No instances found'),
+          ));
+        }
+        setState(() {
+          predictProgress = 1.0;
+          predictionRunning = false;
+          if (predictResult != null) {
+            _onItemTapped(1);
+          }
+        });
+      }
+    } else {
+      if (lastResponse['class_ids'].length > 0) {
         setState(() {
           predictProgress = 1.0;
         });
-        print("displayInstances");
-        image = await displayInstances(
-            originalIE!,
-            response['rois'],
-            response['masks'],
-            response['class_ids'],
-            CarPartsConfig.CLASS_NAMES,
-            scores: response['scores']);
-
-        setState(() {
-          predictProgress = 0.7;
-        });
+        var image = ImageExtender.decodeImage(message);
         var path = DateFormat('yyyyMMdd_HH_mm_ss').format(DateTime.now()) +
             '_server.png';
         await image.saveToTempDir(path);
 
-        predictResult = PredictionResult.fromResult(image, response);
-
-        await saveExternal(path);
+        predictResult = PredictionResult.noMask(image, lastResponse);
       } else {
         predictResult = null;
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: const Text('No instances found'),
         ));
       }
+      lastResponse = Map();
       setState(() {
         predictProgress = 1.0;
         predictionRunning = false;
@@ -357,14 +382,14 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     bool firstMessage = true;
     int readLen = 0;
     int msgLen = 0;
-    String msg = '';
+    List<int> msg = List.empty(growable: true);
 
     socket!.listen(
       (Uint8List data) async {
         while (true) {
           if (firstMessage) {
             readLen = 0;
-            msg = '';
+            msg.clear();
             msgLen = ByteData.view(data.sublist(0, 4).buffer)
                 .getInt32(0, Endian.big);
             data = data.sublist(4, data.length);
@@ -372,11 +397,11 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
           }
 
           if (data.length + readLen < msgLen) {
-            msg += String.fromCharCodes(data);
+            msg.addAll(data);
             readLen += data.length;
             break;
           } else {
-            msg += String.fromCharCodes(data, 0, msgLen - readLen);
+            msg.addAll(data.sublist(0, msgLen - readLen));
 
             await processResponse(msg);
 
@@ -384,14 +409,14 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
             if (data.length + readLen == msgLen) {
               break;
             }
-            data = data.sublist(msgLen);
+            data = data.sublist(msgLen - readLen);
           }
         }
       },
 
       // handle errors
       onError: (error) {
-        print(error);
+        print("onError $error");
         socket!.destroy();
 
         setState(() {
@@ -405,7 +430,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
 
       // handle server ending connection
       onDone: () {
-        print('Server left.');
+        print('Server left. Done');
         socket!.destroy();
 
         setState(() {
@@ -542,29 +567,31 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
                 ));
         return Container(
           color: Colors.black,
-          child: Stack(
-            alignment: AlignmentDirectional.topCenter,
+          child: Column(
             children: [
-              Center(child: Image.asset('assets/images/$selectedTestImage')),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  deviceServerContainer(),
-                  Padding(
-                    padding: const EdgeInsets.only(left: 16.0),
-                    child: DropdownButton(
-                      value: selectedTestImage,
-                      items: dropdownItems,
-                      onChanged: (String? value) {
-                        prefs.setString('selectedTestImage', value!);
-                        setState(() {
-                          selectedTestImage = value;
-                        });
-                      },
-                    ),
-                  )
-                ],
-              ),
+              Container(
+                  width: double.infinity,
+                  // height: double.infinity,
+                  color: Theme.of(context).colorScheme.surface,
+                  child: Row(
+                    children: [
+                      Flexible(child: deviceServerContainer()),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                        child: DropdownButton(
+                          value: selectedTestImage,
+                          items: dropdownItems,
+                          onChanged: (String? value) {
+                            prefs.setString('selectedTestImage', value!);
+                            setState(() {
+                              selectedTestImage = value;
+                            });
+                          },
+                        ),
+                      )
+                    ],
+                  )),
+              Expanded(child: Image.asset('assets/images/$selectedTestImage')),
             ],
           ),
         );
@@ -575,7 +602,11 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
             alignment: AlignmentDirectional.topCenter,
             children: [
               CameraPreview(controller),
-              deviceServerContainer(),
+              Container(
+                  width: double.infinity,
+                  // height: double.infinity,
+                  color: Theme.of(context).colorScheme.surface,
+                  child: deviceServerContainer()),
             ],
           ),
         );
@@ -633,70 +664,65 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   }
 
   Widget deviceServerContainer() {
-    return Container(
-      width: double.infinity,
-      // height: double.infinity,
-      color: Theme.of(context).colorScheme.surface,
-      child: Row(
-        children: [
-          Flexible(
-              child: RadioListTile(
-                  title: Text("Device"),
-                  value: WhereInference.device,
-                  groupValue: inferenceOn,
-                  onChanged: (WhereInference? value) {
-                    setState(() {
-                      inferenceOn = value;
-                    });
-                    if (connected) {
-                      showDialog(
-                          barrierDismissible: false,
-                          context: context,
-                          builder: (context) => AlertDialog(
-                                title: Text("Disconnect from server?"),
-                                actions: [
-                                  TextButton(
-                                      onPressed: () {
-                                        setState(() {
-                                          inferenceOn = WhereInference.server;
-                                        });
-                                        Navigator.pop(context);
-                                      },
-                                      child: Text("No")),
-                                  TextButton(
-                                      onPressed: () {
-                                        socket!.destroy();
-                                        setState(() {
-                                          connected = false;
-                                        });
-                                        Navigator.pop(context);
-                                      },
-                                      child: Text("Yes"))
-                                ],
-                              ));
-                    }
-                  })),
-          Flexible(
+    return Row(
+      children: [
+        Flexible(
             child: RadioListTile(
-                title: Text("Server"),
-                subtitle: connected ? Text("Connected") : Text("Disconnected"),
-                value: WhereInference.server,
+                title: Text("Device"),
+                value: WhereInference.device,
                 groupValue: inferenceOn,
-                onChanged: (WhereInference? value) async {
+                onChanged: (WhereInference? value) {
                   setState(() {
                     inferenceOn = value;
                   });
-                  await showDialog(
-                      barrierDismissible: false,
-                      context: context,
-                      builder: (context) {
-                        return connectAlertDialog();
-                      });
-                  setState(() {});
-                }),
-          ),
-        ],
-      ),
+                  if (connected) {
+                    showDialog(
+                        barrierDismissible: false,
+                        context: context,
+                        builder: (context) => AlertDialog(
+                              title: Text("Disconnect from server?"),
+                              actions: [
+                                TextButton(
+                                    onPressed: () {
+                                      setState(() {
+                                        inferenceOn = WhereInference.server;
+                                      });
+                                      Navigator.pop(context);
+                                    },
+                                    child: Text("No")),
+                                TextButton(
+                                    onPressed: () {
+                                      socket!.destroy();
+                                      setState(() {
+                                        connected = false;
+                                      });
+                                      Navigator.pop(context);
+                                    },
+                                    child: Text("Yes"))
+                              ],
+                            ));
+                  }
+                })),
+        Flexible(
+          child: RadioListTile(
+              title: Text("Server"),
+              subtitle: connected ? Text("Connected") : Text("Disconnected"),
+              value: WhereInference.server,
+              groupValue: inferenceOn,
+              onChanged: (WhereInference? value) async {
+                setState(() {
+                  inferenceOn = value;
+                });
+                await showDialog(
+                    barrierDismissible: false,
+                    context: context,
+                    builder: (context) {
+                      return connectAlertDialog();
+                    });
+                setState(() {});
+              }),
+        ),
+      ],
     );
   }
 
