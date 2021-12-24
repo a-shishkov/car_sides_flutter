@@ -27,7 +27,7 @@ class MaskRCNN {
       : interpreter = Interpreter.fromAddress(address);
 
   Future<Map<String, List>> moldInputs(ImageExtender image) async {
-    var resize = await resizeImage(image,
+    var resize = await resizeImage(ImageExtender.from(image),
         minDim: CarPartsConfig.IMAGE_MIN_DIM,
         maxDim: CarPartsConfig.IMAGE_MAX_DIM,
         minScale: CarPartsConfig.IMAGE_MIN_SCALE,
@@ -45,8 +45,8 @@ class MaskRCNN {
     };
   }
 
-  Future<List> unmoldDetections(
-      detections, List mrcnnMask, originalImageShape, imageShape, window) async{
+  Future<List> unmoldDetections(detections, List mrcnnMask, originalImageShape,
+      imageShape, window) async {
     var N = detections.length;
     for (var i = 0; i < detections.length; i++) {
       if (detections[i][4] == 0) {
@@ -115,7 +115,12 @@ class MaskRCNN {
       var fullMask = await unmoldMask(masks[i], boxes[i], originalImageShape);
       fullMasks.add(fullMask);
     }
-    List stackedFullMask = List.generate(originalImageShape[0], (i) => List.generate(originalImageShape[1], (j) => List.generate(fullMasks.shape[0], (k) => fullMasks[k][i][j])));
+    List stackedFullMask = List.generate(
+        originalImageShape[0],
+        (i) => List.generate(
+            originalImageShape[1],
+            (j) =>
+                List.generate(fullMasks.shape[0], (k) => fullMasks[k][i][j])));
 
     return [boxes, classIDs, scores, stackedFullMask];
   }

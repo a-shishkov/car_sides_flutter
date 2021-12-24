@@ -132,7 +132,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
 
   @override
   void dispose() {
-    controller.dispose();
+    // controller.dispose();
     socket.close();
 
     WidgetsBinding.instance!.removeObserver(this);
@@ -268,20 +268,18 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     if (!controller.value.isInitialized || predictionRunning) {
       return;
     }
-    if (socket != null) {
-      predictionRunning = true;
+    predictionRunning = true;
 
-      await takePicture();
+    await takePicture();
 
-      setState(() {
-        predictProgress = 0.2;
-      });
+    setState(() {
+      predictProgress = 0.2;
+    });
 
-      var imageFile = File(originalImagePath!);
-      var fileBytes = imageFile.readAsBytesSync();
+    var imageFile = File(originalImagePath!);
+    var fileBytes = imageFile.readAsBytesSync();
 
-      sendMessage(fileBytes);
-    }
+    sendMessage(fileBytes);
   }
 
   processResponse(List<int> message) async {
@@ -300,7 +298,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
         });
         print("Downloading ${lastResponse['size']} bytes");
       } else if (lastResponse['response'] == 'Error') {
-        socket!.destroy();
+        socket.destroy();
 
         setState(() {
           originalIE = null;
@@ -376,15 +374,14 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   }
 
   void listenSocket() {
-    print(
-        'Connected to: ${socket!.remoteAddress.address}:${socket!.remotePort}');
+    print('Connected to: ${socket.remoteAddress.address}:${socket.remotePort}');
 
     bool firstMessage = true;
     int readLen = 0;
     int msgLen = 0;
     List<int> msg = List.empty(growable: true);
 
-    socket!.listen(
+    socket.listen(
       (Uint8List data) async {
         while (true) {
           if (firstMessage) {
@@ -417,7 +414,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
       // handle errors
       onError: (error) {
         print("onError $error");
-        socket!.destroy();
+        socket.destroy();
 
         setState(() {
           originalIE = null;
@@ -431,7 +428,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
       // handle server ending connection
       onDone: () {
         print('Server left. Done');
-        socket!.destroy();
+        socket.destroy();
 
         setState(() {
           originalIE = null;
@@ -447,8 +444,8 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   void sendMessage(Uint8List message) {
     var msgSize = ByteData(4);
     msgSize.setInt32(0, message.length);
-    socket!.add(msgSize.buffer.asUint8List());
-    socket!.add(message);
+    socket.add(msgSize.buffer.asUint8List());
+    socket.add(message);
   }
 
   @override
@@ -601,7 +598,19 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
           child: Stack(
             alignment: AlignmentDirectional.topCenter,
             children: [
-              CameraPreview(controller),
+              FutureBuilder(
+                  future: Future.delayed(const Duration(milliseconds: 300)),
+                  builder: (context, snapshot) {
+                    print(
+                        "snapshot.connectionState ${snapshot.connectionState}");
+                    if (snapshot.connectionState == ConnectionState.done) {
+                      return CameraPreview(controller);
+                    } else {
+                      return Container(
+                          color: Colors.black,
+                          child: Center(child: CircularProgressIndicator()));
+                    }
+                  }),
               Container(
                   width: double.infinity,
                   // height: double.infinity,
@@ -692,7 +701,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
                                     child: Text("No")),
                                 TextButton(
                                     onPressed: () {
-                                      socket!.destroy();
+                                      socket.destroy();
                                       setState(() {
                                         connected = false;
                                       });
