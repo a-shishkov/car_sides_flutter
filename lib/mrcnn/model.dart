@@ -2,7 +2,7 @@ import 'package:flutter_app/mrcnn/utils.dart';
 import 'package:flutter_app/utils/image_extender.dart';
 import 'package:tflite_flutter/tflite_flutter.dart';
 import 'package:tflite_flutter_helper/tflite_flutter_helper.dart';
-import 'config.dart';
+import 'configs.dart';
 import 'package:collection/collection.dart';
 
 //  Utility Functions

@@ -4,8 +4,6 @@ import 'package:image/image.dart' as ImagePackage;
 import 'dart:ui';
 import 'package:flutter/material.dart';
 
-import 'config.dart';
-
 randomColors(N, [bright = true]) {
   var brightness = bright ? 1.0 : 0.7;
   var hsv = List.generate(
@@ -69,10 +67,10 @@ Future<ImageExtender> displayInstances(ImageExtender originalImage, List boxes, 
     if (captions == null) {
       var classId = classIds[i];
       var score = scores != null ? scores[i] : null;
-      var label = CarPartsConfig.CLASS_NAMES[classId];
+      var label = classNames[classId];
       var caption =
           score != null ? '$label ${score.toStringAsFixed(3)}' : '$label';
-      originalImage.drawString(ImagePackage.arial_24, x1, y1 + 8, caption);
+      originalImage.drawString(ImagePackage.arial_14, x1, y1 + 8, caption);
     }
   }
   return originalImage;

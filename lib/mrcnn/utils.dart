@@ -3,27 +3,21 @@ import 'package:flutter_app/utils/image_extender.dart';
 import 'package:tflite_flutter/tflite_flutter.dart';
 import 'package:image/image.dart';
 
-List imageTo3DList(Image image) {
-  List rgbImage = image.getBytes(format: Format.rgb);
-  rgbImage = rgbImage.reshape([image.height, image.width, 3]);
-  return rgbImage;
-}
-
 Future<Map> resizeImage(ImageExtender image,
     {minDim, maxDim, minScale, mode = "square"}) async {
-  var h = image.height;
-  var w = image.width;
+  int h = image.height;
+  int w = image.width;
 
-  var window = [0, 0, h, w];
-  var scale = 1.0;
-  var padding = [
+  List<int> window = [0, 0, h, w];
+  double scale = 1.0;
+  List<List<int>> padding = [
     [0, 0],
     [0, 0],
     [0, 0]
   ];
   var crop;
 
-  if (mode == "none")
+  if (mode == "none") {
     return {
       "image": image,
       "window": window,
@@ -31,37 +25,54 @@ Future<Map> resizeImage(ImageExtender image,
       "padding": padding,
       "crop": crop
     };
+  }
 
-  if (minDim != null)
+  if (minDim != null) {
     // Scale up but not down
     scale = max(1, minDim / min(h, w));
-  if (minScale != null && scale < minScale) scale = minScale;
+  }
+  if (minScale != null && scale < minScale) {
+    scale = minScale;
+  }
   // Does it exceed max dim?
-  var imageMax;
+  int imageMax;
 
   if (maxDim != null && mode == "square") {
     imageMax = max(h, w);
-    if ((imageMax * scale) > maxDim) scale = maxDim / imageMax;
+    if ((imageMax * scale) > maxDim) {
+      scale = maxDim / imageMax;
+    }
   }
 
   if (mode == "square") {
+    if (max(h, w) == h) {
+      int newWidth = (w * scale).round();
 
-    var ratio = h / maxDim;
-    int newWidth = w ~/ ratio;
+      int dstX = (maxDim - newWidth) ~/ 2;
 
-    int dstX = (maxDim - newWidth) ~/ 2;
+      image.image = drawImage(
+          Image(maxDim, maxDim, channels: Channels.rgb), image.image,
+          dstX: dstX, dstW: newWidth);
 
-    image.image = drawImage(
-        Image(maxDim, maxDim, channels: Channels.rgb), image.image,
-        dstX: dstX, dstW: newWidth);
+      h = image.height;
+      w = newWidth;
+    } else {
+      int newHeight = (h * scale).round();
 
-    h = image.height;
-    w = newWidth;
+      int dstY = (maxDim - newHeight) ~/ 2;
+
+      image.image = drawImage(
+          Image(maxDim, maxDim, channels: Channels.rgb), image.image,
+          dstY: dstY, dstH: newHeight);
+
+      h = newHeight;
+      w = image.width;
+    }
 
     int topPad = (maxDim - h) ~/ 2;
-    var bottomPad = maxDim - h - topPad;
+    int bottomPad = maxDim - h - topPad;
     int leftPad = (maxDim - w) ~/ 2;
-    var rightPad = maxDim - w - leftPad;
+    int rightPad = maxDim - w - leftPad;
     padding = [
       [topPad, bottomPad],
       [leftPad, rightPad],
@@ -70,50 +81,6 @@ Future<Map> resizeImage(ImageExtender image,
 
     window = [topPad, leftPad, h + topPad, w + leftPad];
   }
-
-/*  // Scale?
-  if (minDim != null)
-    // Scale up but not down
-    scale = max(1, minDim / min(h, w));
-  if (minScale != null && scale < minScale) scale = minScale;
-  // Does it exceed max dim?
-  var imageMax;
-
-  if (maxDim != null && mode == "square") {
-    imageMax = max(h, w);
-    if ((imageMax * scale) > maxDim) scale = maxDim / imageMax;
-  }
-  if (scale != 1) {
-    if (imageMax == h) {
-      image.image = copyResize(image.image, height: minDim);
-      // await image.save(image.path);
-      // image = ImageExtender.from(copyResize(image.image, height: minDim));
-    } else {
-      image = ImageExtender.fromImage(copyResize(image.image, width: minDim));
-    }
-    // image = ImageExtender.from(copyRotate(image.image, -90));
-  }
-
-  late List imageList;
-  if (mode == "square") {
-    var h = image.height;
-    var w = image.width;
-    int topPad = (maxDim - h) ~/ 2;
-    var bottomPad = maxDim - h - topPad;
-    int leftPad = (maxDim - w) ~/ 2;
-    var rightPad = maxDim - w - leftPad;
-    padding = [
-      [topPad, bottomPad],
-      [leftPad, rightPad],
-      [0, 0]
-    ];
-    imageList = image.addPadding(padding);
-
-    `window = [topPad, leftPad, h + topPad, w + leftPad];`
-  }
-  imageList = imageList.flatten();
-  imageList = List.generate(imageList.length, (i) => imageList[i].toDouble());
-  imageList = imageList.reshape([maxDim, maxDim, 3]);*/
 
   return {
     "image": image,

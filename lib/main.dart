@@ -8,7 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:f_logs/f_logs.dart';
-import 'package:flutter_app/mrcnn/config.dart';
+import 'package:flutter_app/mrcnn/configs.dart';
 import 'package:flutter_app/mrcnn/visualize.dart';
 import 'package:flutter_app/pages.dart';
 import 'package:flutter_app/utils/image_extender.dart';
@@ -22,7 +22,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:regexed_validator/regexed_validator.dart';
 
 List<CameraDescription> cameras = [];
-late tfl.Interpreter interpreter;
+late tfl.Interpreter partsInterpreter;
+late tfl.Interpreter damageInterpreter;
 late SharedPreferences prefs;
 
 enum WhereInference { device, server }
@@ -31,8 +32,9 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   cameras = await availableCameras();
   prefs = await SharedPreferences.getInstance();
-  interpreter =
+  partsInterpreter =
       await tfl.Interpreter.fromAsset('car_parts_smallest_fixed_anno.tflite');
+  damageInterpreter = await tfl.Interpreter.fromAsset('car_damage.tflite');
 
   runApp(MyApp());
 }
@@ -226,8 +228,11 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     });
     SendPort sendPort = await receivePort.first;
 
-    var msg = await sendReceive(
-        sendPort, IsolateMsg(originalIE, interpreter.address));
+    var modelType = prefs.getString('modelType') ?? 'parts';
+    var address = modelType == 'parts'
+        ? partsInterpreter.address
+        : damageInterpreter.address;
+    var msg = await sendReceive(sendPort, IsolateMsg(originalIE!, address, modelType));
     setState(() {
       predictProgress = msg[0];
     });
@@ -279,6 +284,8 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     var imageFile = File(originalImagePath!);
     var fileBytes = imageFile.readAsBytesSync();
 
+    sendMessage(Uint8List.fromList(
+        (prefs.getString('modelType') ?? 'parts').codeUnits));
     sendMessage(fileBytes);
   }
 
@@ -313,12 +320,18 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
           setState(() {
             predictProgress = 1.0;
           });
-          image = await displayInstances(
-              originalIE!,
-              lastResponse['rois'],
-              lastResponse['masks'],
-              lastResponse['class_ids'],
-              CarPartsConfig.CLASS_NAMES,
+
+          var classNames;
+          var modelType = prefs.getString('modelType') ?? 'parts';
+          print('modelType $modelType');
+          if (modelType == 'parts') {
+            classNames = CarPartsConfig.CLASS_NAMES;
+          } else if (modelType == 'damage') {
+            classNames = CarDamageConfig.CLASS_NAMES;
+          }
+
+          image = await displayInstances(originalIE!, lastResponse['rois'],
+              lastResponse['masks'], lastResponse['class_ids'], classNames,
               scores: lastResponse['scores']);
 
           setState(() {
@@ -530,7 +543,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
       onPageChanged: _pageChanged,
       children: [
         cameraPage(),
-        MrcnnPage(predictResult),
+        MrcnnPage(predictResult, prefs),
         SettingsPage(prefs),
       ],
     );
@@ -571,22 +584,23 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
                   // height: double.infinity,
                   color: Theme.of(context).colorScheme.surface,
                   child: Row(
-                    children: [
-                      Flexible(child: deviceServerContainer()),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                        child: DropdownButton(
-                          value: selectedTestImage,
-                          items: dropdownItems,
-                          onChanged: (String? value) {
-                            prefs.setString('selectedTestImage', value!);
-                            setState(() {
-                              selectedTestImage = value;
-                            });
-                          },
-                        ),
-                      )
-                    ],
+                    children: listTilesDeviceServer +
+                        [
+                          Padding(
+                            padding:
+                                const EdgeInsets.symmetric(horizontal: 8.0),
+                            child: DropdownButton(
+                              value: selectedTestImage,
+                              items: dropdownItems,
+                              onChanged: (String? value) {
+                                prefs.setString('selectedTestImage', value!);
+                                setState(() {
+                                  selectedTestImage = value;
+                                });
+                              },
+                            ),
+                          )
+                        ],
                   )),
               Expanded(child: Image.asset('assets/images/$selectedTestImage')),
             ],
@@ -615,7 +629,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
                   width: double.infinity,
                   // height: double.infinity,
                   color: Theme.of(context).colorScheme.surface,
-                  child: deviceServerContainer()),
+                  child: Row(children: listTilesDeviceServer)),
             ],
           ),
         );
@@ -672,67 +686,65 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     }
   }
 
-  Widget deviceServerContainer() {
-    return Row(
-      children: [
-        Flexible(
-            child: RadioListTile(
-                title: Text("Device"),
-                value: WhereInference.device,
-                groupValue: inferenceOn,
-                onChanged: (WhereInference? value) {
-                  setState(() {
-                    inferenceOn = value;
-                  });
-                  if (connected) {
-                    showDialog(
-                        barrierDismissible: false,
-                        context: context,
-                        builder: (context) => AlertDialog(
-                              title: Text("Disconnect from server?"),
-                              actions: [
-                                TextButton(
-                                    onPressed: () {
-                                      setState(() {
-                                        inferenceOn = WhereInference.server;
-                                      });
-                                      Navigator.pop(context);
-                                    },
-                                    child: Text("No")),
-                                TextButton(
-                                    onPressed: () {
-                                      socket.destroy();
-                                      setState(() {
-                                        connected = false;
-                                      });
-                                      Navigator.pop(context);
-                                    },
-                                    child: Text("Yes"))
-                              ],
-                            ));
-                  }
-                })),
-        Flexible(
+  List<Widget> get listTilesDeviceServer {
+    return [
+      Flexible(
           child: RadioListTile(
-              title: Text("Server"),
-              subtitle: connected ? Text("Connected") : Text("Disconnected"),
-              value: WhereInference.server,
+              title: Text("Device"),
+              value: WhereInference.device,
               groupValue: inferenceOn,
-              onChanged: (WhereInference? value) async {
+              onChanged: (WhereInference? value) {
                 setState(() {
                   inferenceOn = value;
                 });
-                await showDialog(
-                    barrierDismissible: false,
-                    context: context,
-                    builder: (context) {
-                      return connectAlertDialog();
-                    });
-                setState(() {});
-              }),
-        ),
-      ],
-    );
+                if (connected) {
+                  showDialog(
+                      barrierDismissible: false,
+                      context: context,
+                      builder: (context) => AlertDialog(
+                            title: Text("Disconnect from server?"),
+                            actions: [
+                              TextButton(
+                                  onPressed: () {
+                                    setState(() {
+                                      inferenceOn = WhereInference.server;
+                                    });
+                                    Navigator.pop(context);
+                                  },
+                                  child: Text("No")),
+                              TextButton(
+                                  onPressed: () {
+                                    socket.destroy();
+                                    setState(() {
+                                      connected = false;
+                                    });
+                                    Navigator.pop(context);
+                                  },
+                                  child: Text("Yes"))
+                            ],
+                          ));
+                }
+              })),
+      Flexible(
+        child: RadioListTile(
+            title: Text("Server"),
+            subtitle: connected ? Text("Connected") : Text("Disconnected"),
+            value: WhereInference.server,
+            groupValue: inferenceOn,
+            onChanged: (WhereInference? value) async {
+              setState(() {
+                inferenceOn = value;
+              });
+              await showDialog(
+                  barrierDismissible: false,
+                  context: context,
+                  builder: (context) {
+                    return connectAlertDialog();
+                  });
+              setState(() {});
+            }),
+      ),
+    ];
   }
 
   Widget connectAlertDialog() {

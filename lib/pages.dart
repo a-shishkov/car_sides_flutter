@@ -1,18 +1,16 @@
-import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_app/utils/cache_folder_info.dart';
 import 'package:flutter_app/utils/prediction_result.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:photo_view/photo_view.dart';
-import 'mrcnn/config.dart';
+import 'mrcnn/configs.dart';
 
 class MrcnnPage extends StatelessWidget {
   final PredictionResult? predictionResult;
-
-  const MrcnnPage(this.predictionResult, {Key? key}) : super(key: key);
+  final SharedPreferences prefs;
+  const MrcnnPage(this.predictionResult, this.prefs, {Key? key}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
@@ -50,7 +48,15 @@ class MrcnnPage extends StatelessWidget {
                     )
                   ]);
             } else {
-              var className = CarPartsConfig.CLASS_NAMES[classIds[index - 1]];
+              var classNames;
+              var modelType = prefs.getString('modelType') ?? 'parts';
+              print('modelType $modelType');
+              if (modelType == 'parts') {
+                classNames = CarPartsConfig.CLASS_NAMES;
+              } else if (modelType == 'damage') {
+                classNames = CarDamageConfig.CLASS_NAMES;
+              }
+              var className = classNames[classIds[index - 1]];
               className = className[0].toUpperCase() + className.substring(1);
 
               var score = (scores[index - 1] * 100).round();
@@ -120,7 +126,7 @@ class _SettingsPageState extends State<SettingsPage> {
   late bool saveImagesToDownloadDir =
       widget.prefs.getBool('saveToDownloadDir') ?? false;
   late bool testPicture = widget.prefs.getBool('testPicture') ?? false;
-
+  late String modelType = widget.prefs.getString('modelType') ?? 'parts';
   late String selectedTestImage =
       widget.prefs.getString('selectedTestImage') ?? 'car_800_552.jpg';
 
@@ -168,10 +174,36 @@ class _SettingsPageState extends State<SettingsPage> {
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.all(Radius.circular(0))),
             ),
+            ListTile(
+              title: Text("Model type"),
+              trailing: DropdownButton(
+                value: modelType,
+                items: [
+                  DropdownMenuItem(
+                    child: Text('parts'),
+                    value: 'parts',
+                  ),
+                  DropdownMenuItem(
+                    child: Text('damage'),
+                    value: 'damage',
+                  )
+                ],
+                onChanged: (String? value) {
+                  widget.prefs.setString('modelType', value!);
+                  setState(() {
+                    modelType = value;
+                  });
+                },
+              ),
+              tileColor: Theme.of(context).colorScheme.surface,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.all(Radius.circular(0))),
+            ),
             FutureBuilder(
               future: cacheDirImagesSize(),
               builder: (context, snapshot) {
-                cacheDirInfo = widget.prefs.getString('cacheDirInfo') ?? 'Calculating...';
+                cacheDirInfo =
+                    widget.prefs.getString('cacheDirInfo') ?? 'Calculating...';
                 if (snapshot.connectionState == ConnectionState.done) {
                   if (snapshot.data.toString() == "0 items") {
                     deleteEnabled = false;
@@ -179,7 +211,8 @@ class _SettingsPageState extends State<SettingsPage> {
                     deleteEnabled = true;
                   }
                   cacheDirInfo = snapshot.data.toString();
-                  widget.prefs.setString('cacheDirInfo', snapshot.data.toString());
+                  widget.prefs
+                      .setString('cacheDirInfo', snapshot.data.toString());
                 }
                 return ListTile(
                   enabled: deleteEnabled,
