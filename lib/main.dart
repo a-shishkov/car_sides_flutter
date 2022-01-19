@@ -35,8 +35,22 @@ Future<void> main() async {
   partsInterpreter =
       await tfl.Interpreter.fromAsset('car_parts_smallest_fixed_anno.tflite');
   damageInterpreter = await tfl.Interpreter.fromAsset('car_damage.tflite');
-
+  initImages();
   runApp(MyApp());
+}
+
+Future initImages() async {
+  final manifestContent = await rootBundle.loadString('AssetManifest.json');
+
+  final Map<String, dynamic> manifestMap = json.decode(manifestContent);
+
+  var imagePaths =
+      manifestMap.keys.where((String key) => key.contains('images/')).toList();
+
+  imagePaths = List.generate(
+      imagePaths.length, (index) => imagePaths[index].split('/').last);
+
+  await prefs.setStringList('testImagesList', imagePaths);
 }
 
 class MyApp extends StatelessWidget {
@@ -65,7 +79,7 @@ class MyHomePage extends StatefulWidget {
 }
 
 class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
-  late CameraController controller;
+  CameraController? controller;
 
   String? selectedTestImage =
       prefs.getString('selectedTestImage') ?? 'car_800_552.jpg';
@@ -109,33 +123,50 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     keepPage: true,
   );
 
-  void initializeCameraController() {
-    controller = CameraController(
+  void initializeCameraController() async {
+    if (controller != null) {
+      await controller!.dispose();
+    }
+    final CameraController cameraController = CameraController(
       cameras[0],
       ResolutionPreset.high,
       enableAudio: false,
     );
-    controller.initialize().then((_) {
-      if (!mounted) {
-        return;
+    controller = cameraController;
+    cameraController.addListener(() {
+      if (mounted) setState(() {});
+      if (cameraController.value.hasError) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(
+                'Camera error ${cameraController.value.errorDescription}')));
       }
-      setState(() {});
     });
+
+    try {
+      await cameraController.initialize();
+    } on CameraException catch (e) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(e.toString())));
+    }
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   @override
   void initState() {
     super.initState();
-
+    print('initState');
     serverIP = prefs.getString('serverIP') ?? '';
 
     textControllerIP.text = serverIP;
     textControllerPort.text = serverPort.toString();
 
-    initializeCameraController();
+    var testPicture = prefs.getBool('testPicture') ?? false;
+    if (!testPicture) {
+      initializeCameraController();
+    }
     WidgetsBinding.instance!.addObserver(this);
-
-    initImages();
   }
 
   @override
@@ -149,6 +180,12 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    var testPicture = prefs.getBool('testPicture') ?? false;
+    print('lifecycle $testPicture');
+    if (testPicture) {
+      controller?.dispose();
+      return;
+    }
     final CameraController? cameraController = controller;
     // App state changed before we got the chance to initialize.
     if (cameraController == null || !cameraController.value.isInitialized) {
@@ -165,23 +202,6 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     } else if (state == AppLifecycleState.resumed) {
       initializeCameraController();
     }
-  }
-
-  Future initImages() async {
-    final manifestContent = await rootBundle.loadString('AssetManifest.json');
-
-    final Map<String, dynamic> manifestMap = json.decode(manifestContent);
-
-    var imagePaths = manifestMap.keys
-        .where((String key) => key.contains('images/'))
-        .toList();
-
-    imagePaths = List.generate(
-        imagePaths.length, (index) => imagePaths[index].split('/').last);
-
-    await prefs.setStringList('testImagesList', imagePaths);
-
-    setState(() {});
   }
 
   Future saveExternal(String path) async {
@@ -205,13 +225,15 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
           .asUint8List(byteData.offsetInBytes, byteData.lengthInBytes));
       await originalIE!.saveToTempDir(selectedTestImage);
     } else {
-      XFile file = await controller.takePicture();
+      XFile file = await controller!.takePicture();
       originalIE = ImageExtender.decodeImageFromPath(file.path);
     }
   }
 
   Future predictionDevice() async {
-    if (!controller.value.isInitialized || predictionRunning) {
+    if (controller == null ||
+        !controller!.value.isInitialized ||
+        predictionRunning) {
       return;
     }
 
@@ -272,7 +294,9 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   }
 
   predictionServer() async {
-    if (!controller.value.isInitialized || predictionRunning) {
+    if (controller == null ||
+        !controller!.value.isInitialized ||
+        predictionRunning) {
       return;
     }
     predictionRunning = true;
@@ -500,6 +524,16 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   }
 
   void _onItemTapped(int index) {
+    if (_selectedIndex == 2 && index == 0) {
+      var testPicture = prefs.getBool('testPicture') ?? false;
+      if (testPicture && controller != null) {
+        controller!.dispose();
+        controller = null;
+      } else if (!testPicture && controller == null) {
+        initializeCameraController();
+      }
+    }
+
     if (!predictionRunning) {
       setState(() {
         _selectedIndex = index;
@@ -578,7 +612,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
             ],
           ),
         );
-      } else if (controller.value.isInitialized) {
+      } else if (controller != null && controller!.value.isInitialized) {
         return Container(
           color: Colors.black,
           child: Stack(
@@ -590,7 +624,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
                     print(
                         "snapshot.connectionState ${snapshot.connectionState}");
                     if (snapshot.connectionState == ConnectionState.done) {
-                      return CameraPreview(controller);
+                      return CameraPreview(controller!);
                     } else {
                       return Container(
                           color: Colors.black,
