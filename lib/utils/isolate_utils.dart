@@ -13,34 +13,36 @@ class IsolateMsg {
   IsolateMsg(this.image, this.interpreterAddress, this.modelType);
 }
 
-Future<void> predictIsolate(SendPort sendPort) async {
-  var msg = await receiveSend(sendPort);
-  var data = msg[0];
-  SendPort replyTo = msg[1];
+void predictIsolate(SendPort sendPort) {
+  ReceivePort receivePort = ReceivePort();
+  sendPort.send(receivePort.sendPort);
 
-  ImageExtender image = data.image;
-  var address = data.interpreterAddress;
-  var modelType = data.modelType;
+  receivePort.listen((message) async {
+    print('<isolate> $message received');
+    if (message is IsolateMsg) {
+      ImageExtender image = message.image;
 
-  var model = MaskRCNN.fromAddress(address);
-  replyTo = await sendReceive(replyTo, 0.5);
-  var r = await model.detect(image);
-  replyTo = await sendReceive(replyTo, 0.6);
+      var model = MaskRCNN.fromAddress(message.interpreterAddress);
+      sendPort.send(['progress', 0.5]);
+      var r = await model.detect(image);
+      sendPort.send(['progress', 0.6]);
 
-  if (r["class_ids"].length > 0) {
-    image = await displayInstances(
-        image,
-        r["rois"],
-        r["masks"],
-        r["class_ids"],
-        modelType == 'parts'
-            ? CarPartsConfig.CLASS_NAMES
-            : CarDamageConfig.CLASS_NAMES,
-        scores: r["scores"]);
-    replyTo.send(PredictionResult.fromResult(image, r));
-  } else {
-    replyTo.send(null);
-  }
+      if (r["class_ids"].length > 0) {
+        image = await displayInstances(
+            image,
+            r["rois"],
+            r["masks"],
+            r["class_ids"],
+            message.modelType == 'parts'
+                ? CarPartsConfig.CLASS_NAMES
+                : CarDamageConfig.CLASS_NAMES,
+            scores: r["scores"]);
+        sendPort.send(['result', PredictionResult.fromResult(image, r)]);
+      } else {
+        sendPort.send(['result', null]);
+      }
+    }
+  });
 }
 
 Future receiveSend(SendPort port) {

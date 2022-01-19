@@ -50,7 +50,6 @@ class MrcnnPage extends StatelessWidget {
             } else {
               var classNames;
               var modelType = prefs.getString('modelType') ?? 'parts';
-              print('modelType $modelType');
               if (modelType == 'parts') {
                 classNames = CarPartsConfig.CLASS_NAMES;
               } else if (modelType == 'damage') {

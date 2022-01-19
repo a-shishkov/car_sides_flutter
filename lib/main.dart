@@ -87,6 +87,12 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   PredictionResult? predictResult;
   double predictProgress = 0.0;
 
+  set setProgress(double value) {
+    setState(() {
+      predictProgress = value;
+    });
+  }
+
   WhereInference? inferenceOn = WhereInference.device;
   String serverIP = '';
   int serverPort = 65432;
@@ -210,63 +216,59 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     }
 
     setState(() {
-      predictProgress = 0.1;
+      setProgress = 0.1;
       predictionRunning = true;
     });
 
     await takePicture();
 
-    setState(() {
-      predictProgress = 0.3;
-    });
-
-    ReceivePort receivePort = ReceivePort();
-    await Isolate.spawn(predictIsolate, receivePort.sendPort);
-
-    setState(() {
-      predictProgress = 0.4;
-    });
-    SendPort sendPort = await receivePort.first;
+    setProgress = 0.3;
 
     var modelType = prefs.getString('modelType') ?? 'parts';
     var address = modelType == 'parts'
         ? partsInterpreter.address
         : damageInterpreter.address;
-    var msg = await sendReceive(sendPort, IsolateMsg(originalIE!, address, modelType));
-    setState(() {
-      predictProgress = msg[0];
-    });
-    sendPort = msg[1];
 
-    msg = await sendReceive(sendPort);
-    setState(() {
-      predictProgress = msg[0];
-    });
-    sendPort = msg[1];
+    ReceivePort receivePort = ReceivePort();
+    Completer sendPortCompleter = new Completer<SendPort>();
 
-    predictResult = await sendReceive(sendPort);
+    receivePort.listen((message) async {
+      print('<root> $message received');
+      if (message is SendPort) {
+        sendPortCompleter.complete(message);
+      }
+      if (message is List) {
+        String action = message[0];
+        if (action == 'progress') {
+          setProgress = message[1];
+        } else if (action == 'result') {
+          predictResult = message[1];
 
-    setState(() {
-      predictProgress = 0.7;
-    });
-    if (predictResult != null) {
-      var path =
-          DateFormat('yyyyMMdd_HH_mm_ss').format(DateTime.now()) + '.png';
-      newImagePath = await predictResult!.image.saveToTempDir(path);
-
-      await saveExternal(path);
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: const Text('No instances found'),
-      ));
-    }
-    setState(() {
-      predictProgress = 1.0;
-      predictionRunning = false;
-      if (predictResult != null) {
-        _onItemTapped(1);
+          if (predictResult != null) {
+            var path =
+                DateFormat('yyyyMMdd_HH_mm_ss').format(DateTime.now()) + '.png';
+            newImagePath = await predictResult!.image.saveToTempDir(path);
+            await saveExternal(path);
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: const Text('No instances found'),
+            ));
+          }
+          setState(() {
+            setProgress = 1.0;
+            predictionRunning = false;
+            if (predictResult != null) {
+              _onItemTapped(1);
+            }
+          });
+        }
       }
     });
+
+    await Isolate.spawn(predictIsolate, receivePort.sendPort);
+
+    SendPort sendPort = await sendPortCompleter.future;
+    sendPort.send(IsolateMsg(originalIE!, address, modelType));
   }
 
   predictionServer() async {
@@ -277,9 +279,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
 
     await takePicture();
 
-    setState(() {
-      predictProgress = 0.2;
-    });
+    setProgress = 0.2;
 
     var imageFile = File(originalImagePath!);
     var fileBytes = imageFile.readAsBytesSync();
@@ -290,40 +290,36 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   }
 
   processResponse(List<int> message) async {
-    if (lastResponse['response'] != 'NoMasksResults') {
-      lastResponse = jsonDecode(String.fromCharCodes(message));
-      print("Server: ${lastResponse['response']}");
+    lastResponse = jsonDecode(String.fromCharCodes(message));
+    print("Server: ${lastResponse['response']}");
 
-      if (lastResponse['response'] == 'Downloaded') {
-        setState(() {
-          predictProgress = 0.5;
-        });
-      } else if (lastResponse['response'] == 'Sending') {
-        setState(() {
-          resultSize = lastResponse['size'];
-          predictProgress = 0.55;
-        });
-        print("Downloading ${lastResponse['size']} bytes");
-      } else if (lastResponse['response'] == 'Error') {
-        socket.destroy();
+    if (lastResponse['response'] == 'Downloaded') {
+      setProgress = 0.5;
+    } else if (lastResponse['response'] == 'Sending') {
+      setState(() {
+        resultSize = lastResponse['size'];
+        setProgress = 0.55;
+      });
+      print("Downloading ${lastResponse['size']} bytes");
+    } else if (lastResponse['response'] == 'Error') {
+      socket.destroy();
 
-        setState(() {
-          originalIE = null;
-          inferenceOn = WhereInference.device;
-          connected = false;
-          predictionRunning = false;
-        });
-      } else if (lastResponse['response'] == 'MasksResults') {
-        ImageExtender? image;
+      setState(() {
+        originalIE = null;
+        inferenceOn = WhereInference.device;
+        connected = false;
+        predictionRunning = false;
+      });
+    } else if (lastResponse['response'] == 'MasksResults' ||
+        lastResponse['response'] == 'NoMasksResults') {
+      ImageExtender? image;
 
-        if (lastResponse['class_ids'].length > 0) {
-          setState(() {
-            predictProgress = 1.0;
-          });
+      if (lastResponse['class_ids'].length > 0) {
+        setProgress = 1.0;
 
+        if (lastResponse['response'] == 'MasksResults') {
           var classNames;
           var modelType = prefs.getString('modelType') ?? 'parts';
-          print('modelType $modelType');
           if (modelType == 'parts') {
             classNames = CarPartsConfig.CLASS_NAMES;
           } else if (modelType == 'damage') {
@@ -334,50 +330,26 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
               lastResponse['masks'], lastResponse['class_ids'], classNames,
               scores: lastResponse['scores']);
 
-          setState(() {
-            predictProgress = 0.7;
-          });
-          var path = DateFormat('yyyyMMdd_HH_mm_ss').format(DateTime.now()) +
-              '_server.png';
-          await image.saveToTempDir(path);
-
+          setProgress = 0.7;
           predictResult = PredictionResult.fromResult(image, lastResponse);
-
-          await saveExternal(path);
         } else {
-          predictResult = null;
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: const Text('No instances found'),
-          ));
+          var imageDecoded = base64Decode(lastResponse['image']);
+          image = ImageExtender.decodeImage(imageDecoded);
+          predictResult = PredictionResult.noMask(image, lastResponse);
+          // lastResponse = Map();
         }
-        setState(() {
-          predictProgress = 1.0;
-          predictionRunning = false;
-          if (predictResult != null) {
-            _onItemTapped(1);
-          }
-        });
-      }
-    } else {
-      if (lastResponse['class_ids'].length > 0) {
-        setState(() {
-          predictProgress = 1.0;
-        });
-        var image = ImageExtender.decodeImage(message);
         var path = DateFormat('yyyyMMdd_HH_mm_ss').format(DateTime.now()) +
             '_server.png';
         await image.saveToTempDir(path);
-
-        predictResult = PredictionResult.noMask(image, lastResponse);
+        await saveExternal(path);
       } else {
         predictResult = null;
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: const Text('No instances found'),
         ));
       }
-      lastResponse = Map();
       setState(() {
-        predictProgress = 1.0;
+        setProgress = 1.0;
         predictionRunning = false;
         if (predictResult != null) {
           _onItemTapped(1);
@@ -431,7 +403,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
 
         setState(() {
           originalIE = null;
-          predictProgress = 1.0;
+          setProgress = 1.0;
           inferenceOn = WhereInference.device;
           connected = false;
           predictionRunning = false;
@@ -445,7 +417,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
 
         setState(() {
           originalIE = null;
-          predictProgress = 1.0;
+          setProgress = 1.0;
           inferenceOn = WhereInference.device;
           connected = false;
           predictionRunning = false;
