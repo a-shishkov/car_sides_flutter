@@ -12,12 +12,6 @@ class AnnotationPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    var offsetss = [
-      Offset(10, 100),
-      Offset(50, 50),
-      Offset(80, 100),
-      Offset(50, 100)
-    ];
     Paint myPaint = Paint()
       ..strokeWidth = 5
       ..strokeCap = StrokeCap.round
@@ -28,9 +22,12 @@ class AnnotationPainter extends CustomPainter {
 
     var myCanvas = TouchyCanvas(context, canvas);
     myCanvas.drawImage(image, Offset.zero, Paint());
-    myCanvas.drawPoints(ui.PointMode.polygon, offsetss, myPaint);
-    myCanvas.drawPoints(ui.PointMode.points, offsetss, myPaint2,
-        onTapDown: (_) => print('qeqwerqtwt'));
+    myCanvas.drawPoints(ui.PointMode.polygon, offsets, myPaint);
+    for (var off in offsets) {
+      myCanvas.drawCircle(off, 10, myPaint2, onTapDown: (_) => print('$off'));
+    }
+    // myCanvas.drawPoints(ui.PointMode.points, offsets, myPaint2,
+    //     onTapDown: (_) => print('qeqwerqtwt'));
   }
 
   @override

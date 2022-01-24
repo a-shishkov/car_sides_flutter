@@ -17,8 +17,7 @@ class PolygonPage extends StatefulWidget {
 }
 
 class _PolygonPageState extends State<PolygonPage> {
-  Offset _cursorLocal = Offset(-1, -1);
-  Offset _cursorGlobal = Offset(-1, -1);
+  Offset _cursor = Offset(-1, -1);
   GlobalKey _imageKey = GlobalKey();
 
   List<Offset> offsets = [];
@@ -46,13 +45,7 @@ class _PolygonPageState extends State<PolygonPage> {
           CustomPanGestureRecognizer:
               GestureRecognizerFactoryWithHandlers<CustomPanGestureRecognizer>(
                   () => CustomPanGestureRecognizer(
-                      onPanDown: (Offset details) {
-                        print('onPannDownn;');
-                      },
-                      onPanUpdate: _onPanUpdate,
-                      onPanEnd: (Offset details) {
-                        print('onPannEnnd;');
-                      }),
+                      onPanDown: _onPanDown, onPanUpdate: _onPanUpdate),
                   (CustomPanGestureRecognizer instance) {})
         },
         child: Container(
@@ -66,16 +59,16 @@ class _PolygonPageState extends State<PolygonPage> {
                     snapshot.hasData) {
                   var image = snapshot.data!;
                   return Magnifier(
-                    type: MagnifierType.topLeft,
-                    cursorLocal: _cursorLocal,
-                    cursorGlobal: _cursorGlobal,
+                    type: MagnifierType.topRight,
+                    scale: 5,
+                    cursor: _cursor,
                     child: FittedBox(
+                      key: _imageKey,
                       child: SizedBox(
                         width: image.width.toDouble(),
                         height: image.height.toDouble(),
                         child: CanvasTouchDetector(builder: (context) {
                           return CustomPaint(
-                              key: _imageKey,
                               foregroundPainter:
                                   AnnotationPainter(context, image, offsets));
                         }),
@@ -114,29 +107,34 @@ class _PolygonPageState extends State<PolygonPage> {
     );
   }
 
-  void _onPanUpdate(DragUpdateDetails details) {
+  void _onPanDown(Offset position) {
     setState(() {
-      _cursorLocal = details.localPosition;
-      _cursorGlobal = details.globalPosition;
-      print('_cursorLocal $_cursorLocal _cursorGlobal $_cursorGlobal');
+      _cursor = position;
+    });
+  }
+
+  void _onPanUpdate(Offset position) {
+    setState(() {
+      _cursor = position;
     });
   }
 
   void addPoint() {
     RenderBox box = _imageKey.currentContext!.findRenderObject() as RenderBox;
-
+    Offset offset = box.localToGlobal(Offset.zero);
+    var localPoint = _cursor - offset;
     setState(() {
-      if (_cursorLocal.dx >= 0 &&
-          _cursorLocal.dx < box.size.width &&
-          _cursorLocal.dy >= 0 &&
-          _cursorLocal.dy < box.size.height) {
+      if (localPoint.dx >= 0 &&
+          localPoint.dx < box.size.width &&
+          localPoint.dy >= 0 &&
+          localPoint.dy < box.size.height) {
         print('addPoint');
         late Offset point;
         if (image != null) {
-          point = _cursorLocal.scale(
-              image!.width / box.size.width, image!.height / box.size.height);
+          point = localPoint.scale(image!.width.toDouble() / box.size.width,
+              image!.height.toDouble() / box.size.height);
         } else {
-          futureImage.then((value) => point = _cursorLocal.scale(
+          futureImage.then((value) => point = localPoint.scale(
               image!.width / box.size.width, image!.height / box.size.height));
         }
         offsets.add(point);

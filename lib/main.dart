@@ -30,7 +30,7 @@ late SharedPreferences prefs;
 enum WhereInference { device, server }
 
 Future<void> main() async {
-  debugPrintGestureArenaDiagnostics = true;
+  // debugPrintGestureArenaDiagnostics = true;
   WidgetsFlutterBinding.ensureInitialized();
   cameras = await availableCameras();
   prefs = await SharedPreferences.getInstance();

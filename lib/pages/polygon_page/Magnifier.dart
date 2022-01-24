@@ -8,8 +8,7 @@ enum MagnifierType { center, topLeft, topRight, bottomLeft, bottomRight }
 
 class Magnifier extends StatefulWidget {
   final Widget child;
-  final Offset? cursorLocal;
-  final Offset? cursorGlobal;
+  final Offset? cursor;
   final bool enabled;
   final MagnifierType type;
   final double scale;
@@ -18,8 +17,7 @@ class Magnifier extends StatefulWidget {
 
   const Magnifier(
       {required this.child,
-      this.cursorLocal,
-      this.cursorGlobal,
+      this.cursor,
       this.enabled = true,
       this.type = MagnifierType.bottomRight,
       this.scale = 1.2,
@@ -39,17 +37,16 @@ class _MagnifierState extends State<Magnifier> {
   late MagnifierType _type;
   late GlobalKey _key;
 
-  late Offset _cursorLocal;
-  late Offset _cursorGlobal;
+  late Offset _cursor;
   Matrix4 _matrix = Matrix4.identity();
   Offset _childGlobalOffset = Offset(0, 0);
   Size _childSize = Size(0, 0);
 
   bool get _cursorInWidget {
-    if (_cursorLocal.dx < 0) return false;
-    if (_cursorLocal.dy < 0) return false;
-    if (_cursorLocal.dx > _childSize.width) return false;
-    if (_cursorLocal.dy > _childSize.height) return false;
+    if (crosshairPosition.dx < 0) return false;
+    if (crosshairPosition.dy < 0) return false;
+    if (crosshairPosition.dx > _childSize.width) return false;
+    if (crosshairPosition.dy > _childSize.height) return false;
     return true;
   }
 
@@ -60,8 +57,8 @@ class _MagnifierState extends State<Magnifier> {
     double? bottom;
     switch (_type) {
       case MagnifierType.center:
-        left = _cursorLocal.dx - _size.width / 2;
-        top = _cursorLocal.dy - _size.height / 2;
+        left = crosshairPosition.dx - _size.width / 2;
+        top = crosshairPosition.dy - _size.height / 2;
         break;
       case MagnifierType.topLeft:
         left = 0;
@@ -101,15 +98,18 @@ class _MagnifierState extends State<Magnifier> {
               ),
             ),
           ),
-        Crosshair(position: _cursorLocal),
+        Crosshair(
+          position: crosshairPosition,
+        )
       ],
     );
   }
 
+  Offset get crosshairPosition => _cursor - _childGlobalOffset;
+
   @override
   void initState() {
-    _cursorLocal = widget.cursorLocal ?? Offset(-1, -1);
-    _cursorGlobal = widget.cursorGlobal ?? Offset(-1, -1);
+    _cursor = widget.cursor ?? Offset(-1, -1);
     _type = widget.type;
     _size = widget.size;
     _scale = widget.scale;
@@ -128,11 +128,8 @@ class _MagnifierState extends State<Magnifier> {
     if (oldWidget.type != widget.type) {
       _type = widget.type;
     }
-    if (oldWidget.cursorLocal != widget.cursorLocal) {
-      _cursorLocal = widget.cursorLocal ?? Offset(0, 0);
-    }
-    if (oldWidget.cursorGlobal != widget.cursorGlobal) {
-      _cursorGlobal = widget.cursorGlobal ?? Offset(0, 0);
+    if (oldWidget.cursor != widget.cursor) {
+      _cursor = widget.cursor ?? Offset(0, 0);
     }
     _calculateMatrix();
     super.didUpdateWidget(oldWidget);
@@ -140,7 +137,7 @@ class _MagnifierState extends State<Magnifier> {
 
   @override
   Widget build(BuildContext context) {
-    return widget.cursorLocal == null
+    return widget.cursor == null
         ? GestureDetector(
             onPanUpdate: _onPanUpdate,
             child: _body,
@@ -150,19 +147,18 @@ class _MagnifierState extends State<Magnifier> {
 
   void _onPanUpdate(DragUpdateDetails dragDetails) {
     setState(() {
-      _cursorLocal = dragDetails.localPosition;
-      _cursorGlobal = dragDetails.globalPosition;
+      _cursor = dragDetails.globalPosition;
       _calculateMatrix();
     });
   }
 
-  void _calculateMatrix([Offset? position]) {
+  void _calculateMatrix() {
     RenderBox box = _key.currentContext!.findRenderObject() as RenderBox;
     _childGlobalOffset = box.localToGlobal(Offset.zero);
     _childSize = box.size;
 
-    double newX = position?.dx ?? _cursorGlobal.dx;
-    double newY = position?.dy ?? _cursorGlobal.dy;
+    double newX = _cursor.dx;
+    double newY = _cursor.dy;
     late Matrix4 newMatrix;
     switch (_type) {
       case MagnifierType.center:
@@ -173,15 +169,15 @@ class _MagnifierState extends State<Magnifier> {
         break;
       case MagnifierType.topLeft:
         newX -= (_size.width / 2 + _childGlobalOffset.dx) / _scale;
-        newY -= (_size.width / 2 + _childGlobalOffset.dy) / _scale;
+        newY -= (_size.height / 2 + _childGlobalOffset.dy) / _scale;
         newMatrix = Matrix4.identity()
           ..scale(_scale, _scale)
           ..translate(-newX, -newY);
         break;
       case MagnifierType.topRight:
-        newX -= (_childSize.width - _childGlobalOffset.dx - _size.width / 2) /
+        newX -= (_childSize.width + _childGlobalOffset.dx - _size.width / 2) /
             _scale;
-        newY -= (_size.width / 2 + _childGlobalOffset.dy) / _scale;
+        newY -= (_size.height / 2 + _childGlobalOffset.dy) / _scale;
         newMatrix = Matrix4.identity()
           ..scale(_scale, _scale)
           ..translate(-newX, -newY);
@@ -195,7 +191,7 @@ class _MagnifierState extends State<Magnifier> {
           ..translate(-newX, -newY);
         break;
       case MagnifierType.bottomRight:
-        newX -= (_childSize.width - _childGlobalOffset.dx - _size.width / 2) /
+        newX -= (_childSize.width + _childGlobalOffset.dx - _size.width / 2) /
             _scale;
         newY -= (_childSize.height + _childGlobalOffset.dy - _size.height / 2) /
             _scale;
