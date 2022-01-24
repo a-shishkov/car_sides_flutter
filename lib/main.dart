@@ -4,18 +4,19 @@ import 'dart:async';
 import 'dart:isolate';
 import 'dart:typed_data';
 import 'package:filesize/filesize.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter/widgets.dart';
 import 'package:f_logs/f_logs.dart';
 import 'package:flutter_app/mrcnn/configs.dart';
 import 'package:flutter_app/mrcnn/visualize.dart';
-import 'package:flutter_app/pages.dart';
+import 'package:flutter_app/pages/MrcnnPage.dart';
+import 'package:flutter_app/pages/SettingsPage.dart';
+import 'package:flutter_app/pages/polygon_page/PolygonPage.dart';
 import 'package:flutter_app/utils/image_extender.dart';
 import 'package:flutter_app/utils/isolate_utils.dart';
 import 'package:camera/camera.dart';
 import 'package:flutter_app/utils/prediction_result.dart';
-import 'package:loader_overlay/loader_overlay.dart';
 import 'package:tflite_flutter/tflite_flutter.dart' as tfl;
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -29,6 +30,7 @@ late SharedPreferences prefs;
 enum WhereInference { device, server }
 
 Future<void> main() async {
+  debugPrintGestureArenaDiagnostics = true;
   WidgetsFlutterBinding.ensureInitialized();
   cameras = await availableCameras();
   prefs = await SharedPreferences.getInstance();
@@ -64,7 +66,7 @@ class MyApp extends StatelessWidget {
       ),
       darkTheme: ThemeData(brightness: Brightness.dark),
       themeMode: ThemeMode.system,
-      home: LoaderOverlay(child: MyHomePage('TF Car Sides')),
+      home: MyHomePage('TF Car Sides'),
     );
   }
 }
@@ -96,6 +98,12 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   }
 
   bool predictionRunning = false;
+  setRunning() {
+    setState(() {
+      predictionRunning = !predictionRunning;
+    });
+  }
+
   bool connected = false;
 
   PredictionResult? predictResult;
@@ -110,7 +118,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   WhereInference? inferenceOn = WhereInference.device;
   String serverIP = '';
   int serverPort = 65432;
-  late Socket socket;
+  Socket? socket;
   int resultSize = 0;
   Map lastResponse = Map();
 
@@ -172,7 +180,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   @override
   void dispose() {
     // controller.dispose();
-    socket.close();
+    socket?.close();
 
     WidgetsBinding.instance!.removeObserver(this);
     super.dispose();
@@ -181,7 +189,6 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     var testPicture = prefs.getBool('testPicture') ?? false;
-    print('lifecycle $testPicture');
     if (testPicture) {
       controller?.dispose();
       return;
@@ -230,20 +237,39 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     }
   }
 
-  Future predictionDevice() async {
-    if (controller == null ||
-        !controller!.value.isInitialized ||
-        predictionRunning) {
+  prediction() async {
+    if (!(prefs.getBool('testPicture') ?? false) &&
+        (controller == null ||
+            !controller!.value.isInitialized ||
+            predictionRunning)) {
       return;
     }
-
-    setState(() {
-      setProgress = 0.1;
-      predictionRunning = true;
-    });
+    setProgress = 0.1;
 
     await takePicture();
 
+    var result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => PolygonPage(imagePath: originalImagePath!),
+      ),
+    );
+    print('result $result');
+
+    // setRunning();
+    // switch (inferenceOn) {
+    //   case WhereInference.device:
+    //     predictionDevice();
+    //     break;
+    //   case WhereInference.server:
+    //     predictionServer();
+    //     break;
+    //   default:
+    //     break;
+    // }
+  }
+
+  Future predictionDevice() async {
     setProgress = 0.3;
 
     var modelType = prefs.getString('modelType') ?? 'parts';
@@ -278,7 +304,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
           }
           setState(() {
             setProgress = 1.0;
-            predictionRunning = false;
+            setRunning();
             if (predictResult != null) {
               _onItemTapped(1);
             }
@@ -294,17 +320,6 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   }
 
   predictionServer() async {
-    if (controller == null ||
-        !controller!.value.isInitialized ||
-        predictionRunning) {
-      return;
-    }
-    predictionRunning = true;
-
-    await takePicture();
-
-    setProgress = 0.2;
-
     var imageFile = File(originalImagePath!);
     var fileBytes = imageFile.readAsBytesSync();
 
@@ -326,13 +341,13 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
       });
       print("Downloading ${lastResponse['size']} bytes");
     } else if (lastResponse['response'] == 'Error') {
-      socket.destroy();
+      socket!.destroy();
 
       setState(() {
         originalIE = null;
         inferenceOn = WhereInference.device;
         connected = false;
-        predictionRunning = false;
+        setRunning();
       });
     } else if (lastResponse['response'] == 'MasksResults' ||
         lastResponse['response'] == 'NoMasksResults') {
@@ -374,7 +389,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
       }
       setState(() {
         setProgress = 1.0;
-        predictionRunning = false;
+        setRunning();
         if (predictResult != null) {
           _onItemTapped(1);
         }
@@ -383,14 +398,15 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   }
 
   void listenSocket() {
-    print('Connected to: ${socket.remoteAddress.address}:${socket.remotePort}');
+    print(
+        'Connected to: ${socket!.remoteAddress.address}:${socket!.remotePort}');
 
     bool firstMessage = true;
     int readLen = 0;
     int msgLen = 0;
     List<int> msg = List.empty(growable: true);
 
-    socket.listen(
+    socket!.listen(
       (Uint8List data) async {
         while (true) {
           if (firstMessage) {
@@ -423,21 +439,21 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
       // handle errors
       onError: (error) {
         print("onError $error");
-        socket.destroy();
+        socket!.destroy();
 
         setState(() {
           originalIE = null;
           setProgress = 1.0;
           inferenceOn = WhereInference.device;
           connected = false;
-          predictionRunning = false;
+          setRunning();
         });
       },
 
       // handle server ending connection
       onDone: () {
         print('Server left. Done');
-        socket.destroy();
+        socket!.destroy();
 
         setState(() {
           originalIE = null;
@@ -453,8 +469,8 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   void sendMessage(Uint8List message) {
     var msgSize = ByteData(4);
     msgSize.setInt32(0, message.length);
-    socket.add(msgSize.buffer.asUint8List());
-    socket.add(message);
+    socket!.add(msgSize.buffer.asUint8List());
+    socket!.add(message);
   }
 
   @override
@@ -473,8 +489,13 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
         child: BottomNavigationBar(
           selectedItemColor: predictionRunning
               ? Theme.of(context).colorScheme.background
-              : null,
-          unselectedItemColor: predictionRunning ? Colors.grey[400] : null,
+              : Theme.of(context).brightness == Brightness.light
+                  ? Theme.of(context).colorScheme.primary
+                  : Theme.of(context).colorScheme.secondary,
+          unselectedItemColor: predictionRunning
+              ? Colors.grey[400]
+              : Theme.of(context).unselectedWidgetColor,
+          backgroundColor: Theme.of(context).canvasColor,
           items: [
             BottomNavigationBarItem(
               icon: Icon(Icons.camera),
@@ -495,9 +516,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
       ),
       floatingActionButton: _selectedIndex == 0 && !predictionRunning
           ? FloatingActionButton(
-              onPressed: inferenceOn == WhereInference.device
-                  ? predictionDevice
-                  : predictionServer,
+              onPressed: prediction,
               tooltip: 'Pick Image',
               child: Icon(Icons.add_a_photo))
           : null,
@@ -509,10 +528,8 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     if (pageController.page!.round() == pageController.initialPage)
       return true;
     else {
-      pageController.previousPage(
-        duration: Duration(milliseconds: 500),
-        curve: Curves.ease,
-      );
+      _selectedIndex -= 1;
+      pageController.jumpToPage(_selectedIndex);
       return false;
     }
   }
@@ -570,126 +587,107 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
       1.0: "Done"
     };
 
-    if (!predictionRunning) {
-      if (prefs.getBool('testPicture') ?? false) {
-        selectedTestImage =
-            prefs.getString('selectedTestImage') ?? selectedTestImage;
-        final testImages = prefs.getStringList('testImagesList') ?? [];
-        final List<DropdownMenuItem<String>> dropdownItems = List.generate(
-            testImages.length,
-            (index) => DropdownMenuItem(
-                  child: Text(index.toString()),
-                  value: testImages[index],
-                ));
-        return Container(
-          color: Colors.black,
-          child: Column(
-            children: [
-              Container(
-                  width: double.infinity,
-                  // height: double.infinity,
-                  color: Theme.of(context).colorScheme.surface,
-                  child: Row(
-                    children: listTilesDeviceServer +
-                        [
-                          Padding(
-                            padding:
-                                const EdgeInsets.symmetric(horizontal: 8.0),
-                            child: DropdownButton(
-                              value: selectedTestImage,
-                              items: dropdownItems,
-                              onChanged: (String? value) {
-                                prefs.setString('selectedTestImage', value!);
-                                setState(() {
-                                  selectedTestImage = value;
-                                });
-                              },
-                            ),
-                          )
-                        ],
-                  )),
-              Expanded(child: Image.asset('assets/images/$selectedTestImage')),
-            ],
-          ),
-        );
-      } else if (controller != null && controller!.value.isInitialized) {
-        return Container(
-          color: Colors.black,
-          child: Stack(
-            alignment: AlignmentDirectional.topCenter,
-            children: [
-              FutureBuilder(
-                  future: Future.delayed(const Duration(milliseconds: 300)),
-                  builder: (context, snapshot) {
-                    print(
-                        "snapshot.connectionState ${snapshot.connectionState}");
-                    if (snapshot.connectionState == ConnectionState.done) {
-                      return CameraPreview(controller!);
-                    } else {
-                      return Container(
-                          color: Colors.black,
-                          child: Center(child: CircularProgressIndicator()));
-                    }
-                  }),
-              Container(
-                  width: double.infinity,
-                  // height: double.infinity,
-                  color: Theme.of(context).colorScheme.surface,
-                  child: Row(children: listTilesDeviceServer)),
-            ],
-          ),
-        );
-      } else {
-        return Container(
-          color: Colors.black,
-          child: Center(
-            child: CircularProgressIndicator(),
-          ),
-        );
-      }
-    } else if (originalImagePath != null) {
-      return Container(
-        color: Colors.black,
-        child: Stack(
-          alignment: AlignmentDirectional.center,
-          children: [
-            Image.file(File(originalImagePath!)),
-            Container(
-              width: 150,
-              height: 150,
-              // color: Colors.white.withOpacity(0.2),
-              decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.4),
-                  border: Border.all(
-                    color: Colors.transparent,
-                  ),
-                  borderRadius: BorderRadius.all(Radius.circular(20))),
-              child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    CircularProgressIndicator(
-                      value: predictProgress,
-                    ),
-                    SizedBox(
-                      height: 10,
-                    ),
-                    Text(
-                      progressMsg[predictProgress]!,
-                      style: TextStyle(color: Colors.white),
-                    ),
-                  ]),
+    Widget child = Center(child: CircularProgressIndicator());
+
+    if (predictionRunning && originalImagePath != null) {
+      child = Stack(
+        alignment: AlignmentDirectional.center,
+        children: [
+          Image.file(File(originalImagePath!)),
+          Container(
+            width: 150,
+            height: 150,
+            decoration: BoxDecoration(
+              color: Theme.of(context).canvasColor,
+              border: Border.all(
+                color: Colors.transparent,
+              ),
+              borderRadius: BorderRadius.all(Radius.circular(20)),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withAlpha(100),
+                  spreadRadius: 5,
+                  blurRadius: 10,
+                  offset: Offset(0, 3), // changes position of shadow
+                ),
+              ],
             ),
-          ],
-        ),
+            child:
+                Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+              CircularProgressIndicator(),
+              SizedBox(
+                height: 10,
+              ),
+              Text(
+                progressMsg[predictProgress]!,
+              ),
+            ]),
+          ),
+        ],
       );
-    } else {
-      return Container(
-        color: Colors.black,
-        child: Center(
-          child: CircularProgressIndicator(),
-        ),
+    } else if (!predictionRunning && (prefs.getBool('testPicture') ?? false)) {
+      selectedTestImage =
+          prefs.getString('selectedTestImage') ?? selectedTestImage;
+      final testImages = prefs.getStringList('testImagesList') ?? [];
+      final List<DropdownMenuItem<String>> dropdownItems = List.generate(
+          testImages.length,
+          (index) => DropdownMenuItem(
+                child: Text(index.toString()),
+                value: testImages[index],
+              ));
+      child = Column(
+        children: [
+          Container(
+              width: double.infinity,
+              // height: double.infinity,
+              color: Theme.of(context).colorScheme.surface,
+              child: Row(
+                children: listTilesDeviceServer +
+                    [
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                        child: DropdownButton(
+                          value: selectedTestImage,
+                          items: dropdownItems,
+                          onChanged: (String? value) {
+                            prefs.setString('selectedTestImage', value!);
+                            setState(() {
+                              selectedTestImage = value;
+                            });
+                          },
+                        ),
+                      )
+                    ],
+              )),
+          Expanded(child: Image.asset('assets/images/$selectedTestImage')),
+        ],
+      );
+    } else if (!predictionRunning &&
+        controller != null &&
+        controller!.value.isInitialized) {
+      return Stack(
+        alignment: AlignmentDirectional.topCenter,
+        children: [
+          FutureBuilder(
+              future: Future.delayed(const Duration(milliseconds: 300)),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.done) {
+                  return CameraPreview(controller!);
+                } else {
+                  return Container(
+                      color: Colors.black,
+                      child: Center(child: CircularProgressIndicator()));
+                }
+              }),
+          Container(
+              width: double.infinity,
+              // height: double.infinity,
+              color: Theme.of(context).colorScheme.surface,
+              child: Row(children: listTilesDeviceServer)),
+        ],
       );
     }
+    return Container(color: Colors.black, child: child);
   }
 
   List<Widget> get listTilesDeviceServer {
@@ -720,7 +718,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
                                   child: Text("No")),
                               TextButton(
                                   onPressed: () {
-                                    socket.destroy();
+                                    socket?.destroy();
                                     setState(() {
                                       connected = false;
                                     });
