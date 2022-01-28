@@ -30,6 +30,7 @@ late SharedPreferences prefs;
 enum WhereInference { device, server }
 
 Future<void> main() async {
+  print('main');
   // debugPrintGestureArenaDiagnostics = true;
   WidgetsFlutterBinding.ensureInitialized();
   cameras = await availableCameras();
@@ -251,7 +252,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     var result = await Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => PolygonPage(imagePath: originalImagePath!),
+        builder: (context) => PolygonPage(imageFile: File(originalImagePath!)),
       ),
     );
     print('result $result');

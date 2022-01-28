@@ -98,9 +98,6 @@ class _MagnifierState extends State<Magnifier> {
               ),
             ),
           ),
-        Crosshair(
-          position: crosshairPosition,
-        )
       ],
     );
   }

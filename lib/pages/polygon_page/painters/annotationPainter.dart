@@ -1,41 +1,58 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'dart:ui' as ui;
-import 'package:collection/collection.dart';
+import 'package:provider/provider.dart';
 import 'package:touchable/touchable.dart';
+import 'AnnotationController.dart';
 
 class AnnotationPainter extends CustomPainter {
-  AnnotationPainter(this.context, this.image, this.offsets);
+  AnnotationPainter(this.context, this.points)
+      : controller = Provider.of<AnnotationController>(context, listen: false);
 
+  final AnnotationController controller;
   final BuildContext context;
-  final ui.Image image;
-  final List<Offset> offsets;
+  List<Offset> points;
 
   @override
   void paint(Canvas canvas, Size size) {
-    Paint myPaint = Paint()
-      ..strokeWidth = 5
-      ..strokeCap = StrokeCap.round
-      ..color = Colors.red;
-    Paint myPaint2 = Paint()
-      ..strokeWidth = 20
-      ..color = Colors.green;
+    // print(controller.j++);
+    var tCanvas = TouchyCanvas(context, canvas);
+    tCanvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height),
+        Paint()..color = Colors.transparent,
+        onPanStart: controller.onPanStart,
+        onPanDown: controller.onPanDown,
+        onPanUpdate: controller.onPanUpdate);
 
-    var myCanvas = TouchyCanvas(context, canvas);
-    myCanvas.drawImage(image, Offset.zero, Paint());
-    myCanvas.drawPoints(ui.PointMode.polygon, offsets, myPaint);
-    for (var off in offsets) {
-      myCanvas.drawCircle(off, 10, myPaint2, onTapDown: (_) => print('$off'));
+    tCanvas.drawPath(Path()..addPolygon(controller.points, false),
+        Paint()..color = Colors.amberAccent.withOpacity(0.5),
+        hitTestBehavior: HitTestBehavior.translucent);
+
+    for (var i = 0; i < points.length; i++) {
+      var offset = points[i];
+      tCanvas.drawCircle(
+          offset, 30, Paint()..color = Colors.green.withOpacity(0.5),
+          onPanStart: (details) {
+        controller.onPanStart(details);
+        controller.points[i] = details.localPosition;
+      }, onPanDown: (details) {
+        controller.onPanDown(details);
+        controller.points[i] = details.localPosition;
+      }, onPanUpdate: (details) {
+        controller.onPanUpdate(details);
+        controller.points[i] = details.localPosition;
+      });
+      tCanvas.drawCircle(offset, 10, Paint()..color = Colors.green,
+          hitTestBehavior: HitTestBehavior.translucent);
     }
-    // myCanvas.drawPoints(ui.PointMode.points, offsets, myPaint2,
-    //     onTapDown: (_) => print('qeqwerqtwt'));
   }
 
   @override
   bool shouldRepaint(covariant AnnotationPainter oldDelegate) {
-    return true;
-    if (!ListEquality().equals(oldDelegate.offsets, this.offsets)) {
-      return true;
-    }
+    // print('points ${controller.points} old ${oldDelegate.points}');
+    // print('= ${controller.points=oldDelegate.points}');
+    // if(!listEquals(points, oldDelegate.points))
+    // {
+    //   return true;
+    // }
     return false;
   }
 }
