@@ -9,19 +9,25 @@ enum MagnifierType { center, topLeft, topRight, bottomLeft, bottomRight }
 class Magnifier extends StatefulWidget {
   final Widget child;
   final Offset? cursor;
+  final Function(DragStartDetails)? onPanStart;
+  final Function(DragUpdateDetails)? onPanUpdate;
+  final Function(DragEndDetails)? onPanEnd;
   final bool enabled;
   final MagnifierType type;
   final double scale;
-  final Size size;
+  final double size;
   final CustomPainter painter;
 
   const Magnifier(
       {required this.child,
       this.cursor,
+      this.onPanStart,
+      this.onPanUpdate,
+      this.onPanEnd,
       this.enabled = true,
       this.type = MagnifierType.bottomRight,
       this.scale = 1.2,
-      this.size = const Size(100, 100),
+      this.size = 100,
       this.painter = const CrosshairMagnifierPainter(),
       Key? key})
       : super(key: key);
@@ -31,7 +37,7 @@ class Magnifier extends StatefulWidget {
 }
 
 class _MagnifierState extends State<Magnifier> {
-  late Size _size;
+  late double _size;
   late double _scale;
 
   late MagnifierType _type;
@@ -57,8 +63,8 @@ class _MagnifierState extends State<Magnifier> {
     double? bottom;
     switch (_type) {
       case MagnifierType.center:
-        left = crosshairPosition.dx - _size.width / 2;
-        top = crosshairPosition.dy - _size.height / 2;
+        left = crosshairPosition.dx - _size / 2;
+        top = crosshairPosition.dy - _size / 2;
         break;
       case MagnifierType.topLeft:
         left = 0;
@@ -93,7 +99,7 @@ class _MagnifierState extends State<Magnifier> {
                 filter: ImageFilter.matrix(_matrix.storage),
                 child: CustomPaint(
                   painter: widget.painter,
-                  size: _size,
+                  size: Size(_size, _size),
                 ),
               ),
             ),
@@ -136,17 +142,30 @@ class _MagnifierState extends State<Magnifier> {
   Widget build(BuildContext context) {
     return widget.cursor == null
         ? GestureDetector(
-            onPanUpdate: _onPanUpdate,
-            child: _body,
-          )
+            onPanStart: _onPanStart, onPanUpdate: _onPanUpdate, onPanEnd: _onPanEnd, child: _body)
         : _body;
   }
 
-  void _onPanUpdate(DragUpdateDetails dragDetails) {
+  void _onPanStart(DragStartDetails details) {
+    if (widget.onPanStart != null) widget.onPanStart!(details);
     setState(() {
-      _cursor = dragDetails.globalPosition;
+      _cursor = details.globalPosition;
       _calculateMatrix();
     });
+  }
+
+  void _onPanUpdate(DragUpdateDetails details) {
+    if (widget.onPanUpdate != null) widget.onPanUpdate!(details);
+    setState(() {
+      _cursor = details.globalPosition;
+      _calculateMatrix();
+    });
+  }
+
+  
+
+  void _onPanEnd(DragEndDetails details) {
+    if(widget.onPanEnd != null) widget.onPanEnd!(details);
   }
 
   void _calculateMatrix() {
@@ -165,33 +184,31 @@ class _MagnifierState extends State<Magnifier> {
           ..translate(-newX, -newY);
         break;
       case MagnifierType.topLeft:
-        newX -= (_size.width / 2 + _childGlobalOffset.dx) / _scale;
-        newY -= (_size.height / 2 + _childGlobalOffset.dy) / _scale;
+        newX -= (_size / 2 + _childGlobalOffset.dx) / _scale;
+        newY -= (_size / 2 + _childGlobalOffset.dy) / _scale;
         newMatrix = Matrix4.identity()
           ..scale(_scale, _scale)
           ..translate(-newX, -newY);
         break;
       case MagnifierType.topRight:
-        newX -= (_childSize.width + _childGlobalOffset.dx - _size.width / 2) /
-            _scale;
-        newY -= (_size.height / 2 + _childGlobalOffset.dy) / _scale;
+        newX -= (_childSize.width + _childGlobalOffset.dx - _size / 2) / _scale;
+        newY -= (_size / 2 + _childGlobalOffset.dy) / _scale;
         newMatrix = Matrix4.identity()
           ..scale(_scale, _scale)
           ..translate(-newX, -newY);
         break;
       case MagnifierType.bottomLeft:
-        newX -= (_size.width / 2 + _childGlobalOffset.dx) / _scale;
-        newY -= (_childSize.height + _childGlobalOffset.dy - _size.height / 2) /
-            _scale;
+        newX -= (_size / 2 + _childGlobalOffset.dx) / _scale;
+        newY -=
+            (_childSize.height + _childGlobalOffset.dy - _size / 2) / _scale;
         newMatrix = Matrix4.identity()
           ..scale(_scale, _scale)
           ..translate(-newX, -newY);
         break;
       case MagnifierType.bottomRight:
-        newX -= (_childSize.width + _childGlobalOffset.dx - _size.width / 2) /
-            _scale;
-        newY -= (_childSize.height + _childGlobalOffset.dy - _size.height / 2) /
-            _scale;
+        newX -= (_childSize.width + _childGlobalOffset.dx - _size / 2) / _scale;
+        newY -=
+            (_childSize.height + _childGlobalOffset.dy - _size / 2) / _scale;
         newMatrix = Matrix4.identity()
           ..scale(_scale, _scale)
           ..translate(-newX, -newY);
