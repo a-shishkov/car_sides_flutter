@@ -49,6 +49,7 @@ class _MagnifierState extends State<Magnifier> {
   Size _childSize = Size(0, 0);
 
   bool get _cursorInWidget {
+    return true;
     if (crosshairPosition.dx < 0) return false;
     if (crosshairPosition.dy < 0) return false;
     if (crosshairPosition.dx > _childSize.width) return false;
@@ -140,10 +141,7 @@ class _MagnifierState extends State<Magnifier> {
 
   @override
   Widget build(BuildContext context) {
-    return widget.cursor == null
-        ? GestureDetector(
-            onPanStart: _onPanStart, onPanUpdate: _onPanUpdate, onPanEnd: _onPanEnd, child: _body)
-        : _body;
+    return _body;
   }
 
   void _onPanStart(DragStartDetails details) {

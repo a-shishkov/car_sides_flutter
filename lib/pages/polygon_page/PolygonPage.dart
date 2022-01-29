@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_app/pages/polygon_page/Magnifier.dart';
 import 'package:flutter_app/pages/polygon_page/painters/AnnotationPainter.dart';
 import 'package:flutter_app/pages/polygon_page/painters/MyCustomPainter.dart';
+import 'package:get/get.dart';
 import 'package:provider/provider.dart';
 import 'package:touchable/touchable.dart';
 import 'painters/AnnotationController.dart';
@@ -19,8 +20,38 @@ class PolygonPage extends StatefulWidget {
 }
 
 class _PolygonPageState extends State<PolygonPage> {
-  List<Offset> _points = [Offset(50, 70), Offset(100, 120), Offset(150, 170)];
-  // List<Color> colors = [Colors.orange, Colors.pink, Colors.redAccent];
+  List<Offset> _points = [
+    Offset(42.7, 120.4),
+    Offset(58.0, 95.7),
+    Offset(73.3, 69.1),
+    Offset(93.3, 63.7),
+    Offset(110.0, 61.1),
+    Offset(129.3, 65.7),
+    Offset(149.3, 68.4),
+    Offset(168.7, 68.4),
+    Offset(184.0, 79.1),
+    Offset(198.7, 88.4),
+    Offset(215.3, 96.4),
+    Offset(232.7, 99.1),
+    Offset(246.7, 106.4),
+    Offset(259.3, 113.7),
+    Offset(262.0, 135.0),
+    Offset(254.0, 153.7),
+    Offset(239.3, 165.7),
+    Offset(222.0, 171.0),
+    Offset(205.3, 160.4),
+    Offset(184.0, 165.1),
+    Offset(162.0, 165.7),
+    Offset(154.7, 177.0),
+    Offset(137.3, 179.1),
+    Offset(119.3, 161.7),
+    Offset(91.3, 151.7),
+    Offset(68.0, 149.1),
+    Offset(59.3, 162.4),
+    Offset(44.7, 149.7)
+  ];
+
+  double pointRadius = 5;
 
   List<Widget> get pointContainers {
     return List.generate(_points.length, (index) {
@@ -38,7 +69,7 @@ class _PolygonPageState extends State<PolygonPage> {
   }
 
   Offset? _cursor;
-  Offset? _localCursor;
+  Offset? _globalCursor;
 
   ButtonStyle get buttonStyle => ButtonStyle(
       foregroundColor: MaterialStateProperty.all<Color>(Colors.white));
@@ -52,15 +83,27 @@ class _PolygonPageState extends State<PolygonPage> {
       body: Container(
         color: Colors.black,
         child: Center(
-            child: Magnifier(
-                scale: 5,
-                onPanStart: onPanStart,
-                onPanUpdate: onPanUpdate,
-                onPanEnd: onPanEnd,
-                child: CustomPaint(
-                  child: Image.file(widget.imageFile),
-                  foregroundPainter: MyCustomPainter(_points, _selectedPoint),
-                ))),
+            child: GestureDetector(
+          dragStartBehavior: DragStartBehavior.down,
+          onTapDown: onTapDown,
+          onTapUp: onTapUp,
+          onDoubleTapDown: onDoubleTapDown,
+          onDoubleTap: onDoubleTap,
+          onLongPressStart: onLongPressStart,
+          onLongPressMoveUpdate: onLongPressMoveUpdate,
+          onLongPressUp: onLongPressUp,
+          onPanStart: onPanStart,
+          onPanUpdate: onPanUpdate,
+          onPanEnd: onPanEnd,
+          child: Magnifier(
+              cursor: _globalCursor,
+              scale: 2,
+              child: CustomPaint(
+                child: Image.file(widget.imageFile),
+                foregroundPainter:
+                    MyCustomPainter(_points, _selectedPoint, pointRadius),
+              )),
+        )),
       ),
       bottomNavigationBar: BottomAppBar(
         color: Colors.black,
@@ -86,26 +129,106 @@ class _PolygonPageState extends State<PolygonPage> {
   }
 
   int? _selectedPoint;
-  void onPanStart(DragStartDetails details) async {
-    _cursor = details.localPosition;
-    // print('onPanStart, $_cursor');
-    for (var i = 0; i < _points.length; i++) {
-      if (pow(_points[i].dx - _cursor!.dx, 2) +
-              pow(_points[i].dy - _cursor!.dy, 2) <
-          pow(10, 2)) {
-        _selectedPoint = i;
-        print('touching ${_points[i]}');
+
+  int? get touchIndex {
+    if (_cursor != null) {
+      for (var i = 0; i < _points.length; i++) {
+        if (pow(_points[i].dx - _cursor!.dx, 2) +
+                pow(_points[i].dy - _cursor!.dy, 2) <
+            pow(pointRadius, 2)) {
+          print('touching ${_points[i]}');
+          return i;
+        }
       }
     }
   }
 
+  void onTapDown(TapDownDetails details) {
+    setState(() {
+      print('onTapDown');
+      _cursor = details.localPosition;
+      _globalCursor = details.globalPosition;
+    });
+  }
+
+  void onTapUp(TapUpDetails details) {
+    print('onTapUp');
+    setState(() {
+      _cursor = details.localPosition;
+      _globalCursor = details.globalPosition;
+      if (touchIndex == null) {
+        _points.add(_cursor!);
+      }
+    });
+  }
+
+  void onDoubleTapDown(TapDownDetails details) {
+    print('onDoubleTapDown');
+    setState(() {
+      _cursor = details.localPosition;
+      _globalCursor = details.globalPosition;
+    });
+  }
+
+  void onDoubleTap() {
+    print('doubleTap');
+    setState(() {
+      var index = touchIndex;
+      if (index != null) {
+        _points.removeAt(index);
+        _selectedPoint = null;
+      }
+    });
+  }
+
+  void onLongPressStart(LongPressStartDetails details) {
+    print('longPress');
+    setState(() {
+      _cursor = details.localPosition;
+      _globalCursor = details.globalPosition;
+      _selectedPoint = touchIndex;
+      print('index $_selectedPoint');
+      if (_selectedPoint == null) {
+        _selectedPoint = _points.length;
+        _points.add(_cursor!);
+      }
+    });
+  }
+
+  void onLongPressMoveUpdate(LongPressMoveUpdateDetails details) {
+    setState(() {
+      if (_selectedPoint != null) {
+        _cursor = details.localPosition;
+        _globalCursor = details.globalPosition;
+        _points[_selectedPoint!] = _cursor!;
+      }
+    });
+  }
+
+  void onLongPressUp() {
+    print('long press up');
+    setState(() {
+      _selectedPoint = null;
+    });
+  }
+
+  void onPanStart(DragStartDetails details) {
+    print('onPanStart');
+    setState(() {
+      _cursor = details.localPosition;
+      _globalCursor = details.globalPosition;
+    });
+    _selectedPoint = touchIndex;
+  }
+
   void onPanUpdate(DragUpdateDetails details) {
-    _cursor = details.localPosition;
-    if (_selectedPoint != null) {
-      setState(() {
-        _points[_selectedPoint!] += details.delta;
-      });
-    }
+    setState(() {
+      _cursor = details.localPosition;
+      _globalCursor = details.globalPosition;
+      if (_selectedPoint != null) {
+        _points[_selectedPoint!] = _cursor!;
+      }
+    });
   }
 
   void onPanEnd(DragEndDetails details) {
