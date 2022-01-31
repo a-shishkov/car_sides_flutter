@@ -1,4 +1,4 @@
-import 'image_extender.dart';
+import 'ImageExtender.dart';
 
 class PredictionResult {
   ImageExtender image;

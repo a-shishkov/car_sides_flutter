@@ -1,5 +1,5 @@
 import 'dart:math';
-import 'package:flutter_app/utils/image_extender.dart';
+import 'package:flutter_app/utils/ImageExtender.dart';
 import 'package:tflite_flutter/tflite_flutter.dart';
 import 'package:image/image.dart';
 

@@ -1,58 +1,80 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import 'package:touchable/touchable.dart';
-import 'AnnotationController.dart';
+import 'package:flutter_app/annotation/Annotation.dart';
+import 'package:flutter_app/pages/polygon_page/AnnotationPage.dart';
+import 'package:flutter_app/utils/ImageExtender.dart';
 
-class AnnotationPainter extends CustomPainter {
-  AnnotationPainter(this.context, this.points)
-      : controller = Provider.of<AnnotationController>(context, listen: false);
+class MyCustomPainter extends CustomPainter {
+  int currentAnnotation;
+  Position? selectedPoint;
 
-  final AnnotationController controller;
-  final BuildContext context;
-  List<Offset> points;
+  List<Annotation> annotations;
+
+  double _pointStrokeWidth = 1;
+  double pointRadius;
+  double get _circleRadius => pointRadius - _pointStrokeWidth;
+
+  MyCustomPainter(this.annotations, this.currentAnnotation, this.selectedPoint,
+      this.pointRadius);
 
   @override
   void paint(Canvas canvas, Size size) {
-    // print(controller.j++);
-    var tCanvas = TouchyCanvas(context, canvas);
-    tCanvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height),
-        Paint()..color = Colors.transparent,
-        onPanStart: controller.onPanStart,
-        onPanDown: controller.onPanDown,
-        onPanUpdate: controller.onPanUpdate);
+    Paint pointPaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = _pointStrokeWidth;
 
-    tCanvas.drawPath(Path()..addPolygon(controller.points, false),
-        Paint()..color = Colors.amberAccent.withOpacity(0.5),
-        hitTestBehavior: HitTestBehavior.translucent);
+    Paint polygonPaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeJoin = StrokeJoin.round
+      ..strokeWidth = 1;
+    // Paint fillPaint = Paint()..color = color.withOpacity(0.15);
 
-    for (var i = 0; i < points.length; i++) {
-      var offset = points[i];
-      tCanvas.drawCircle(
-          offset, 30, Paint()..color = Colors.green.withOpacity(0.5),
-          onPanStart: (details) {
-        controller.onPanStart(details);
-        controller.points[i] = details.localPosition;
-      }, onPanDown: (details) {
-        controller.onPanDown(details);
-        controller.points[i] = details.localPosition;
-      }, onPanUpdate: (details) {
-        controller.onPanUpdate(details);
-        controller.points[i] = details.localPosition;
-      });
-      tCanvas.drawCircle(offset, 10, Paint()..color = Colors.green,
-          hitTestBehavior: HitTestBehavior.translucent);
+    for (var i = 0; i < annotations.length; i++) {
+      var segmentation = annotations[i].segmentation;
+      // Color color = HSVColor.fromAHSV(1, (i * 100) % 360, 1, 1).toColor();
+      Color color = currentAnnotation == i ? Colors.red : Colors.white;
+
+      canvas.drawPath(Path()..addPolygon(segmentation.points, true),
+          polygonPaint..color = color);
+      canvas.drawPath(Path()..addPolygon(segmentation.points, true),
+          Paint()..color = color.withOpacity(0.2));
+
+      for (var j = 0; j < segmentation.length; j++) {
+        canvas.drawCircle(
+            segmentation[j],
+            _circleRadius * (selectedPoint == Position(i, j) ? 2 : 1),
+            pointPaint..color = color);
+      }
     }
+
+    /* for (var i = -1; i < annotations.length; i++) {
+      var segmentation;
+      Color color;
+      if (i == -1) {
+        segmentation = points;
+        color = Colors.white;
+      } else {
+        segmentation = annotations[i].segmetation;
+        color = HSVColor.fromAHSV(1, (i * 100) % 360, 1, 1).toColor();
+      }
+      canvas.drawPath(
+          Path()..addPolygon(segmentation, true), polygonPaint..color = color);
+      canvas.drawPath(Path()..addPolygon(points, true),
+          Paint()..color = color.withOpacity(0.15));
+      for (var j = 0; j < segmentation.length; j++) {
+        if (j == selectedPoint) {
+          canvas.drawCircle(
+              segmentation[j], _circleRadius * 2, pointPaint..color = color);
+        } else {
+          canvas.drawCircle(
+              segmentation[j], _circleRadius, pointPaint..color = color);
+        }
+      }
+      // canvas.drawPoints(PointMode.points, points, pointPaint);}
+    } */
   }
 
   @override
-  bool shouldRepaint(covariant AnnotationPainter oldDelegate) {
-    // print('points ${controller.points} old ${oldDelegate.points}');
-    // print('= ${controller.points=oldDelegate.points}');
-    // if(!listEquals(points, oldDelegate.points))
-    // {
-    //   return true;
-    // }
-    return false;
+  bool shouldRepaint(MyCustomPainter oldDelegate) {
+    return true;
   }
 }

@@ -1,4 +1,6 @@
 import 'dart:io';
+import 'dart:ui';
+import 'package:flutter_app/annotation/Annotation.dart';
 import 'package:flutter_app/mrcnn/utils.dart' as utils;
 import 'package:image/image.dart' as ImagePackage;
 import 'package:tflite_flutter/tflite_flutter.dart';
@@ -7,6 +9,7 @@ import 'package:path_provider/path_provider.dart';
 class ImageExtender {
   ImagePackage.Image image;
   String? path;
+  List<Annotation> annotations = [];
 
   ImageExtender.decodeImage(List<int> data)
       : image = ImagePackage.decodeImage(data)!;
@@ -32,6 +35,8 @@ class ImageExtender {
         .reshape([image.height, image.width, 3]);
   }
 
+  Size get size => Size(image.width.toDouble(), image.height.toDouble());
+
   int get height => image.height;
 
   int get width => image.width;
@@ -46,7 +51,10 @@ class ImageExtender {
   }
 
   resize(width, height) {
-    image = ImagePackage.copyResize(image, width: width, height: height, interpolation: ImagePackage.Interpolation.cubic);
+    image = ImagePackage.copyResize(image,
+        width: width,
+        height: height,
+        interpolation: ImagePackage.Interpolation.cubic);
   }
 
   rotate(num angle) async {

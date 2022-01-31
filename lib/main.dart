@@ -12,8 +12,8 @@ import 'package:flutter_app/mrcnn/configs.dart';
 import 'package:flutter_app/mrcnn/visualize.dart';
 import 'package:flutter_app/pages/MrcnnPage.dart';
 import 'package:flutter_app/pages/SettingsPage.dart';
-import 'package:flutter_app/pages/polygon_page/PolygonPage.dart';
-import 'package:flutter_app/utils/image_extender.dart';
+import 'package:flutter_app/pages/polygon_page/AnnotationPage.dart';
+import 'package:flutter_app/utils/ImageExtender.dart';
 import 'package:flutter_app/utils/isolate_utils.dart';
 import 'package:camera/camera.dart';
 import 'package:flutter_app/utils/prediction_result.dart';
@@ -180,6 +180,8 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
 
   @override
   void dispose() {
+    textControllerIP.dispose();
+    textControllerPort.dispose();
     // controller.dispose();
     socket?.close();
 
@@ -249,13 +251,11 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
 
     await takePicture();
 
-    var result = await Navigator.push(
+    originalIE!.annotations = await Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (context) => PolygonPage(imageFile: File(originalImagePath!)),
-      ),
+      MaterialPageRoute(builder: (context) => PolygonPage(image: originalIE!)),
     );
-    print('result $result');
+    print('result ${originalIE!.annotations}');
 
     // setRunning();
     // switch (inferenceOn) {

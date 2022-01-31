@@ -2,7 +2,7 @@ import 'dart:isolate';
 import 'package:flutter_app/mrcnn/configs.dart';
 import 'package:flutter_app/mrcnn/model.dart';
 import 'package:flutter_app/mrcnn/visualize.dart';
-import 'package:flutter_app/utils/image_extender.dart';
+import 'package:flutter_app/utils/ImageExtender.dart';
 import 'package:flutter_app/utils/prediction_result.dart';
 
 class IsolateMsg {

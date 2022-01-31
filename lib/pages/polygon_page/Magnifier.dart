@@ -4,7 +4,8 @@ import 'package:flutter/material.dart';
 import 'Crosshair.dart';
 import 'painters/magnifierPainters.dart';
 
-enum MagnifierType { center, topLeft, topRight, bottomLeft, bottomRight }
+enum MagnifierType { center, top, bottom }
+enum _SidedMagnifierType { center, topLeft, topRight, bottomLeft, bottomRight }
 
 class Magnifier extends StatefulWidget {
   final Widget child;
@@ -25,7 +26,7 @@ class Magnifier extends StatefulWidget {
       this.onPanUpdate,
       this.onPanEnd,
       this.enabled = true,
-      this.type = MagnifierType.bottomRight,
+      this.type = MagnifierType.top,
       this.scale = 1.2,
       this.size = 100,
       this.painter = const CrosshairMagnifierPainter(),
@@ -40,7 +41,7 @@ class _MagnifierState extends State<Magnifier> {
   late double _size;
   late double _scale;
 
-  late MagnifierType _type;
+  late _SidedMagnifierType _type;
   late GlobalKey _key;
 
   late Offset _cursor;
@@ -48,8 +49,9 @@ class _MagnifierState extends State<Magnifier> {
   Offset _childGlobalOffset = Offset(0, 0);
   Size _childSize = Size(0, 0);
 
+  Offset get crosshairPosition => _cursor - _childGlobalOffset;
+
   bool get _cursorInWidget {
-    return true;
     if (crosshairPosition.dx < 0) return false;
     if (crosshairPosition.dy < 0) return false;
     if (crosshairPosition.dx > _childSize.width) return false;
@@ -63,23 +65,23 @@ class _MagnifierState extends State<Magnifier> {
     double? top;
     double? bottom;
     switch (_type) {
-      case MagnifierType.center:
+      case _SidedMagnifierType.center:
         left = crosshairPosition.dx - _size / 2;
         top = crosshairPosition.dy - _size / 2;
         break;
-      case MagnifierType.topLeft:
+      case _SidedMagnifierType.topLeft:
         left = 0;
         top = 0;
         break;
-      case MagnifierType.topRight:
+      case _SidedMagnifierType.topRight:
         right = 0;
         top = 0;
         break;
-      case MagnifierType.bottomLeft:
+      case _SidedMagnifierType.bottomLeft:
         left = 0;
         bottom = 0;
         break;
-      case MagnifierType.bottomRight:
+      case _SidedMagnifierType.bottomRight:
         right = 0;
         bottom = 0;
         break;
@@ -109,12 +111,20 @@ class _MagnifierState extends State<Magnifier> {
     );
   }
 
-  Offset get crosshairPosition => _cursor - _childGlobalOffset;
-
   @override
   void initState() {
     _cursor = widget.cursor ?? Offset(-1, -1);
-    _type = widget.type;
+
+    switch (widget.type) {
+      case MagnifierType.center:
+        _type = _SidedMagnifierType.center;
+        break;
+      case MagnifierType.top:
+        _type = _SidedMagnifierType.topLeft;
+        break;
+      case MagnifierType.bottom:
+        _type = _SidedMagnifierType.bottomLeft;
+    }
     _size = widget.size;
     _scale = widget.scale;
     _key = GlobalKey();
@@ -130,12 +140,23 @@ class _MagnifierState extends State<Magnifier> {
       _scale = widget.scale;
     }
     if (oldWidget.type != widget.type) {
-      _type = widget.type;
+      switch (widget.type) {
+        case MagnifierType.center:
+          _type = _SidedMagnifierType.center;
+          break;
+        case MagnifierType.top:
+          _type = _SidedMagnifierType.topLeft;
+          break;
+        case MagnifierType.bottom:
+          _type = _SidedMagnifierType.bottomLeft;
+      }
     }
     if (oldWidget.cursor != widget.cursor) {
       _cursor = widget.cursor ?? Offset(0, 0);
     }
-    _calculateMatrix();
+    if (widget.enabled) {
+      _calculateMatrix();
+    }
     super.didUpdateWidget(oldWidget);
   }
 
@@ -160,42 +181,55 @@ class _MagnifierState extends State<Magnifier> {
     });
   }
 
-  
-
   void _onPanEnd(DragEndDetails details) {
-    if(widget.onPanEnd != null) widget.onPanEnd!(details);
+    if (widget.onPanEnd != null) widget.onPanEnd!(details);
   }
 
   void _calculateMatrix() {
     RenderBox box = _key.currentContext!.findRenderObject() as RenderBox;
     _childGlobalOffset = box.localToGlobal(Offset.zero);
     _childSize = box.size;
-
     double newX = _cursor.dx;
     double newY = _cursor.dy;
+
+    if (_cursor.dx > (_childSize.width + _childGlobalOffset.dx) / 2) {
+      if (_type == _SidedMagnifierType.topLeft ||
+          _type == _SidedMagnifierType.topRight) {
+        _type = _SidedMagnifierType.topLeft;
+      } else {
+        _type = _SidedMagnifierType.bottomLeft;
+      }
+    } else {
+      if (_type == _SidedMagnifierType.topLeft ||
+          _type == _SidedMagnifierType.topRight) {
+        _type = _SidedMagnifierType.topRight;
+      } else {
+        _type = _SidedMagnifierType.bottomRight;
+      }
+    }
     late Matrix4 newMatrix;
     switch (_type) {
-      case MagnifierType.center:
+      case _SidedMagnifierType.center:
         newMatrix = Matrix4.identity()
           ..translate(newX, newY)
           ..scale(_scale, _scale)
           ..translate(-newX, -newY);
         break;
-      case MagnifierType.topLeft:
+      case _SidedMagnifierType.topLeft:
         newX -= (_size / 2 + _childGlobalOffset.dx) / _scale;
         newY -= (_size / 2 + _childGlobalOffset.dy) / _scale;
         newMatrix = Matrix4.identity()
           ..scale(_scale, _scale)
           ..translate(-newX, -newY);
         break;
-      case MagnifierType.topRight:
+      case _SidedMagnifierType.topRight:
         newX -= (_childSize.width + _childGlobalOffset.dx - _size / 2) / _scale;
         newY -= (_size / 2 + _childGlobalOffset.dy) / _scale;
         newMatrix = Matrix4.identity()
           ..scale(_scale, _scale)
           ..translate(-newX, -newY);
         break;
-      case MagnifierType.bottomLeft:
+      case _SidedMagnifierType.bottomLeft:
         newX -= (_size / 2 + _childGlobalOffset.dx) / _scale;
         newY -=
             (_childSize.height + _childGlobalOffset.dy - _size / 2) / _scale;
@@ -203,7 +237,7 @@ class _MagnifierState extends State<Magnifier> {
           ..scale(_scale, _scale)
           ..translate(-newX, -newY);
         break;
-      case MagnifierType.bottomRight:
+      case _SidedMagnifierType.bottomRight:
         newX -= (_childSize.width + _childGlobalOffset.dx - _size / 2) / _scale;
         newY -=
             (_childSize.height + _childGlobalOffset.dy - _size / 2) / _scale;

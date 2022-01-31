@@ -26,7 +26,7 @@ class CrosshairMagnifierPainter extends CustomPainter {
   final double strokeWidth;
   final Color color;
   const CrosshairMagnifierPainter(
-      {this.strokeWidth = 5, this.color = Colors.black});
+      {this.strokeWidth = 5, this.color = Colors.white});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -35,14 +35,16 @@ class CrosshairMagnifierPainter extends CustomPainter {
       ..strokeWidth = strokeWidth
       ..color = color;
 
-    Paint crossHairPaint = Paint()..color = Colors.black;
+    Paint crossHairPaint = Paint()
+      ..strokeWidth = 2
+      ..color = color;
 
     canvas.drawCircle(
         size.center(Offset(0, 0)), size.longestSide / 2, circlePaint);
-    canvas.drawLine(size.topCenter(Offset(0, 0)),
-        size.bottomCenter(Offset(0, 0)), crossHairPaint);
-    canvas.drawLine(size.centerLeft(Offset(0, 0)),
-        size.centerRight(Offset(0, 0)), crossHairPaint);
+    canvas.drawLine(size.center(Offset(0, -10)), size.center(Offset(0, 10)),
+        crossHairPaint);
+    canvas.drawLine(size.center(Offset(-10, 0)), size.center(Offset(10, 0)),
+        crossHairPaint);
   }
 
   @override
