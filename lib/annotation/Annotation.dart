@@ -155,19 +155,32 @@ class Polygon {
 }
 
 class Annotation {
-  String name;
-  Polygon segmentation;
+  // String name;
+  int categoryId;
+  Polygon polygon;
 
-  Annotation(this.name, this.segmentation);
+  Annotation(this.categoryId, this.polygon);
+
+  List<double> get segmentation {
+    List<double> segmentation = [];
+    for (var point in polygon.points) {
+      segmentation.add(point.dx);
+      segmentation.add(point.dy);
+    }
+    return segmentation;
+  }
+
+  Map<String, dynamic> get toMap =>
+      {'category_id': categoryId, 'segmentation': segmentation};
 
   void scale(double scaleX, double scaleY) {
-    for (var i = 0; i < segmentation.length; i++) {
-      segmentation[i] = segmentation[i].scale(scaleX, scaleY);
+    for (var i = 0; i < polygon.length; i++) {
+      polygon[i] = polygon[i].scale(scaleX, scaleY);
     }
   }
 
   @override
   String toString() {
-    return 'Annotation($name ${segmentation.toString()})';
+    return 'Annotation($categoryId ${polygon.toString()})';
   }
 }

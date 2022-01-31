@@ -29,7 +29,7 @@ class MyCustomPainter extends CustomPainter {
     // Paint fillPaint = Paint()..color = color.withOpacity(0.15);
 
     for (var i = 0; i < annotations.length; i++) {
-      var segmentation = annotations[i].segmentation;
+      var segmentation = annotations[i].polygon;
       // Color color = HSVColor.fromAHSV(1, (i * 100) % 360, 1, 1).toColor();
       Color color = currentAnnotation == i ? Colors.red : Colors.white;
 

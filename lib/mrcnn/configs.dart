@@ -9,7 +9,7 @@ class CarPartsConfig {
   static const List<double> RPN_ANCHOR_RATIOS = [0.5, 1, 2];
   static const List<double> RPN_ANCHOR_SCALES = [8, 16, 32, 64, 128];
   static const int RPN_ANCHOR_STRIDE = 1;
-  static const List CLASS_NAMES = [
+  static const List<String> CLASS_NAMES = [
     'BG',
     'bumper',
     'glass',
@@ -33,5 +33,5 @@ class CarDamageConfig {
   static const List<double> RPN_ANCHOR_RATIOS = [0.5, 1, 2];
   static const List<double> RPN_ANCHOR_SCALES = [8, 16, 32, 64, 128];
   static const int RPN_ANCHOR_STRIDE = 1;
-  static const List CLASS_NAMES = ['BG', 'damage'];
+  static const List<String> CLASS_NAMES = ['BG', 'damage'];
 }

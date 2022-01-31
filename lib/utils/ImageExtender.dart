@@ -9,7 +9,7 @@ import 'package:path_provider/path_provider.dart';
 class ImageExtender {
   ImagePackage.Image image;
   String? path;
-  List<Annotation> annotations = [];
+  List<Annotation>? annotations;
 
   ImageExtender.decodeImage(List<int> data)
       : image = ImagePackage.decodeImage(data)!;

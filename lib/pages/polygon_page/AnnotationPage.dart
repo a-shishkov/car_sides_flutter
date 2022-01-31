@@ -3,9 +3,11 @@ import 'dart:math';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_app/annotation/Annotation.dart';
+import 'package:flutter_app/mrcnn/configs.dart';
 import 'package:flutter_app/pages/polygon_page/Magnifier.dart';
 import 'package:flutter_app/pages/polygon_page/painters/AnnotationPainter.dart';
 import 'package:flutter_app/utils/ImageExtender.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class PolygonPage extends StatefulWidget {
   const PolygonPage({Key? key, required this.image}) : super(key: key);
@@ -131,8 +133,8 @@ class _PolygonPageState extends State<PolygonPage> {
   Position? get touchIndex {
     if (_cursor != null) {
       for (var i = 0; i < annotations.length; i++) {
-        for (var j = 0; j < annotations[i].segmentation.length; j++) {
-          var point = annotations[i].segmentation[j];
+        for (var j = 0; j < annotations[i].polygon.length; j++) {
+          var point = annotations[i].polygon[j];
           if (pow(point.dx - _cursor!.dx, 2) + pow(point.dy - _cursor!.dy, 2) <
               pow(pointRadius + pointExtraReact, 2)) {
             print('touching $point');
@@ -146,7 +148,7 @@ class _PolygonPageState extends State<PolygonPage> {
   int? get touchPolygon {
     if (_cursor != null) {
       for (var i = 0; i < annotations.length; i++) {
-        var segmentation = annotations[i].segmentation;
+        var segmentation = annotations[i].polygon;
         if (segmentation.isPointInside(_cursor!)) {
           return i;
         }
@@ -167,15 +169,15 @@ class _PolygonPageState extends State<PolygonPage> {
     setState(() {
       var index = touchIndex;
       if (index != null) {
-        annotations[index.row].segmentation.removeAt(index.column);
-        if (annotations[index.row].segmentation.length <= 0) {
+        annotations[index.row].polygon.removeAt(index.column);
+        if (annotations[index.row].polygon.length <= 0) {
           annotations.removeAt(index.row);
         }
         _selectedPoint = null;
       }
 
-      print('${_currentAnnotation.segmentation.length}');
-      if (_currentAnnotation.segmentation.length < 3) {
+      print('${_currentAnnotation.polygon.length}');
+      if (_currentAnnotation.polygon.length < 3) {
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: const Text('Add 3 point atleast')));
         return;
@@ -216,8 +218,8 @@ class _PolygonPageState extends State<PolygonPage> {
       print('index $_selectedPoint');
       if (_selectedPoint == null) {
         _selectedPoint = Position(
-            _currentAnnotationIndex, _currentAnnotation.segmentation.length);
-        _currentAnnotation.segmentation.add(_cursor!);
+            _currentAnnotationIndex, _currentAnnotation.polygon.length);
+        _currentAnnotation.polygon.add(_cursor!);
       }
     });
   }
@@ -227,7 +229,7 @@ class _PolygonPageState extends State<PolygonPage> {
       if (_selectedPoint != null) {
         _cursor = details.localPosition;
         _globalCursor = details.globalPosition;
-        annotations[_selectedPoint!.row].segmentation[_selectedPoint!.column] =
+        annotations[_selectedPoint!.row].polygon[_selectedPoint!.column] =
             _cursor!;
       }
     });
@@ -253,7 +255,7 @@ class _PolygonPageState extends State<PolygonPage> {
       return;
     }
 
-    if (_currentAnnotation.segmentation.length < 3) {
+    if (_currentAnnotation.polygon.length < 3) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text('Create atleast 3 points'),
       ));
@@ -277,25 +279,56 @@ class _PolygonPageState extends State<PolygonPage> {
   }
 
   Future<bool> addNewAnnotationDialog() async {
-    var controller = TextEditingController();
+    int categoryId = 0;
+
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    late List<String> classNames;
+    switch (prefs.getString('modelType') ?? 'parts') {
+      case 'parts':
+        classNames = CarPartsConfig.CLASS_NAMES;
+        break;
+      case 'damage':
+        classNames = CarDamageConfig.CLASS_NAMES;
+        break;
+      default:
+    }
+    classNames = classNames.skip(1).toList();
+
+    if (classNames.length < 2) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Added ${classNames[0]}. Start annotating')));
+      setState(() {
+        _currentAnnotationIndex = annotations.length;
+      });
+      annotations.add(Annotation(categoryId + 1, Polygon([])));
+      return true;
+    }
     var result = await showDialog(
         context: context,
         builder: (BuildContext context) {
           return StatefulBuilder(builder: (context, setState) {
             return AlertDialog(
-              title: Text('New annotation'),
-              content: TextField(
-                controller: controller,
-                decoration: InputDecoration(
-                  labelText: 'Enter name',
-                ),
+              title: const Text('New annotation'),
+              content: DropdownButton<int>(
+                value: categoryId,
+                onChanged: (int? value) {
+                  setState(() {
+                    categoryId = value!;
+                  });
+                },
+                items: classNames.map((String value) {
+                  return DropdownMenuItem(
+                    value: classNames.indexOf(value),
+                    child: Text(value),
+                  );
+                }).toList(),
               ),
               actions: [
                 TextButton(
                     onPressed: () => Navigator.pop(context, null),
                     child: Text('Cancel')),
                 TextButton(
-                    onPressed: () => Navigator.pop(context, controller.text),
+                    onPressed: () => Navigator.pop(context, categoryId),
                     child: Text('Add'))
               ],
             );
@@ -305,7 +338,7 @@ class _PolygonPageState extends State<PolygonPage> {
       setState(() {
         _currentAnnotationIndex = annotations.length;
       });
-      annotations.add(Annotation(result, Polygon([])));
+      annotations.add(Annotation(categoryId + 1, Polygon([])));
       return true;
     }
     return false;

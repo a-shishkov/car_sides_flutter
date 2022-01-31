@@ -99,9 +99,9 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   }
 
   bool predictionRunning = false;
-  setRunning() {
+  set setRunning(bool value) {
     setState(() {
-      predictionRunning = !predictionRunning;
+      predictionRunning = value;
     });
   }
 
@@ -255,19 +255,18 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
       context,
       MaterialPageRoute(builder: (context) => PolygonPage(image: originalIE!)),
     );
-    print('result ${originalIE!.annotations}');
 
-    // setRunning();
-    // switch (inferenceOn) {
-    //   case WhereInference.device:
-    //     predictionDevice();
-    //     break;
-    //   case WhereInference.server:
-    //     predictionServer();
-    //     break;
-    //   default:
-    //     break;
-    // }
+    setRunning = true;
+    switch (inferenceOn) {
+      case WhereInference.device:
+        // predictionDevice();
+        break;
+      case WhereInference.server:
+        predictionServer();
+        break;
+      default:
+        break;
+    }
   }
 
   Future predictionDevice() async {
@@ -305,7 +304,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
           }
           setState(() {
             setProgress = 1.0;
-            setRunning();
+            setRunning = false;
             if (predictResult != null) {
               _onItemTapped(1);
             }
@@ -322,11 +321,17 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
 
   predictionServer() async {
     var imageFile = File(originalImagePath!);
-    var fileBytes = imageFile.readAsBytesSync();
+    var imageBytes = imageFile.readAsBytesSync();
+    var imageEncoded = base64.encode(imageBytes);
 
-    sendMessage(Uint8List.fromList(
-        (prefs.getString('modelType') ?? 'parts').codeUnits));
-    sendMessage(fileBytes);
+    sendMessage(Uint8List.fromList(jsonEncode({
+      'model': prefs.getString('modelType') ?? 'parts',
+      'image': imageEncoded,
+      'annotations': originalIE!.annotations != null
+          ? List.generate(originalIE!.annotations!.length,
+              (index) => originalIE!.annotations![index].toMap)
+          : null
+    }).codeUnits));
   }
 
   processResponse(List<int> message) async {
@@ -348,7 +353,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
         originalIE = null;
         inferenceOn = WhereInference.device;
         connected = false;
-        setRunning();
+        setRunning = false;
       });
     } else if (lastResponse['response'] == 'MasksResults' ||
         lastResponse['response'] == 'NoMasksResults') {
@@ -390,7 +395,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
       }
       setState(() {
         setProgress = 1.0;
-        setRunning();
+        setRunning = false;
         if (predictResult != null) {
           _onItemTapped(1);
         }
@@ -447,7 +452,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
           setProgress = 1.0;
           inferenceOn = WhereInference.device;
           connected = false;
-          setRunning();
+          setRunning = false;
         });
       },
 
@@ -468,6 +473,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   }
 
   void sendMessage(Uint8List message) {
+    print('messageLength ${message.length}');
     var msgSize = ByteData(4);
     msgSize.setInt32(0, message.length);
     socket!.add(msgSize.buffer.asUint8List());
@@ -596,8 +602,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
         children: [
           Image.file(File(originalImagePath!)),
           Container(
-            width: 150,
-            height: 150,
+            padding: EdgeInsets.all(10),
             decoration: BoxDecoration(
               color: Theme.of(context).canvasColor,
               border: Border.all(
@@ -613,16 +618,18 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
                 ),
               ],
             ),
-            child:
-                Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-              CircularProgressIndicator(),
-              SizedBox(
-                height: 10,
-              ),
-              Text(
-                progressMsg[predictProgress]!,
-              ),
-            ]),
+            child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(
+                    height: 10,
+                  ),
+                  Text(
+                    progressMsg[predictProgress]!,
+                  ),
+                ]),
           ),
         ],
       );
@@ -698,56 +705,14 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
               title: Text("Device"),
               value: WhereInference.device,
               groupValue: inferenceOn,
-              onChanged: (WhereInference? value) {
-                setState(() {
-                  inferenceOn = value;
-                });
-                if (connected) {
-                  showDialog(
-                      barrierDismissible: false,
-                      context: context,
-                      builder: (context) => AlertDialog(
-                            title: Text("Disconnect from server?"),
-                            actions: [
-                              TextButton(
-                                  onPressed: () {
-                                    setState(() {
-                                      inferenceOn = WhereInference.server;
-                                    });
-                                    Navigator.pop(context);
-                                  },
-                                  child: Text("No")),
-                              TextButton(
-                                  onPressed: () {
-                                    socket?.destroy();
-                                    setState(() {
-                                      connected = false;
-                                    });
-                                    Navigator.pop(context);
-                                  },
-                                  child: Text("Yes"))
-                            ],
-                          ));
-                }
-              })),
+              onChanged: onChangedDeviceServer)),
       Flexible(
         child: RadioListTile(
             title: Text("Server"),
             subtitle: connected ? Text("Connected") : Text("Disconnected"),
             value: WhereInference.server,
             groupValue: inferenceOn,
-            onChanged: (WhereInference? value) async {
-              setState(() {
-                inferenceOn = value;
-              });
-              await showDialog(
-                  barrierDismissible: false,
-                  context: context,
-                  builder: (context) {
-                    return connectAlertDialog();
-                  });
-              setState(() {});
-            }),
+            onChanged: onChangedDeviceServer),
       ),
     ];
   }
@@ -854,5 +819,60 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
         ],
       );
     });
+  }
+
+  void onChangedDeviceServer(WhereInference? value) async {
+    print('$inferenceOn $value');
+
+    switch (value) {
+      case WhereInference.device:
+        print('inferenceOn device');
+        setState(() {
+          inferenceOn = value;
+        });
+        if (connected) {
+          showDialog(
+              barrierDismissible: false,
+              context: context,
+              builder: (context) => AlertDialog(
+                    title: Text("Disconnect from server?"),
+                    actions: [
+                      TextButton(
+                          onPressed: () {
+                            setState(() {
+                              inferenceOn = WhereInference.server;
+                            });
+                            Navigator.pop(context);
+                          },
+                          child: Text("No")),
+                      TextButton(
+                          onPressed: () {
+                            socket?.destroy();
+                            setState(() {
+                              connected = false;
+                            });
+                            Navigator.pop(context);
+                          },
+                          child: Text("Yes"))
+                    ],
+                  ));
+        }
+        break;
+      case WhereInference.server:
+        print('inferenceOn server');
+        setState(() {
+          inferenceOn = value;
+        });
+        await showDialog(
+            barrierDismissible: false,
+            context: context,
+            builder: (context) {
+              return connectAlertDialog();
+            });
+        setState(() {});
+        break;
+      case null:
+        break;
+    }
   }
 }
