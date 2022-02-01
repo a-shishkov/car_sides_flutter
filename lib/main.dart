@@ -108,12 +108,11 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   bool connected = false;
 
   PredictionResult? predictResult;
-  double predictProgress = 0.0;
+  ValueNotifier<double> predictProgress = ValueNotifier(0.0);
 
   set setProgress(double value) {
-    setState(() {
-      predictProgress = value;
-    });
+    print('setProgress');
+    predictProgress.value = value;
   }
 
   WhereInference? inferenceOn = WhereInference.device;
@@ -126,7 +125,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   TextEditingController textControllerIP = TextEditingController();
   TextEditingController textControllerPort = TextEditingController();
 
-  int _selectedIndex = 0;
+  int selectedPage = 0;
   PageController pageController = PageController(
     initialPage: 0,
     keepPage: true,
@@ -214,7 +213,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     }
   }
 
-  Future saveExternal(String path) async {
+  Future trySaveExternal(String path) async {
     if (prefs.getBool('saveToDownloadDir') ?? false) {
       var imagePath = await predictResult!.image.saveToDownloadDir(path);
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -240,7 +239,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     }
   }
 
-  prediction() async {
+  startPrediction() async {
     if (!(prefs.getBool('testPicture') ?? false) &&
         (controller == null ||
             !controller!.value.isInitialized ||
@@ -257,9 +256,44 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     );
 
     setRunning = true;
+
+    var progressMsg = {
+      0.0: "Nothing",
+      0.1: "Taking picture",
+      0.2: "Sending picture",
+      0.3: "Start prediction",
+      0.4: "Waiting for result",
+      0.5: "Running model",
+      0.55: "Receiving result (${filesize(resultSize)})",
+      0.6: "Visualizing result",
+      0.7: "Saving picture",
+      0.9: "Rendering picture",
+      1.0: "Done"
+    };
+
+    showDialog(
+        barrierDismissible: false,
+        context: context,
+        builder: (BuildContext context) {
+          return ValueListenableBuilder(
+              valueListenable: predictProgress,
+              builder: (context, value, child) {
+                return AlertDialog(
+                  content: Row(
+                    children: [
+                      CircularProgressIndicator(),
+                      SizedBox(
+                        width: 10,
+                      ),
+                      Text(progressMsg[value] ?? 'No text')
+                    ],
+                  ),
+                );
+              });
+        });
     switch (inferenceOn) {
       case WhereInference.device:
-        // predictionDevice();
+        predictionDevice();
         break;
       case WhereInference.server:
         predictionServer();
@@ -296,17 +330,18 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
             var path =
                 DateFormat('yyyyMMdd_HH_mm_ss').format(DateTime.now()) + '.png';
             newImagePath = await predictResult!.image.saveToTempDir(path);
-            await saveExternal(path);
+            await trySaveExternal(path);
           } else {
             ScaffoldMessenger.of(context).showSnackBar(SnackBar(
               content: const Text('No instances found'),
             ));
           }
+          Navigator.pop(context);
           setState(() {
             setProgress = 1.0;
             setRunning = false;
             if (predictResult != null) {
-              _onItemTapped(1);
+              onItemTapped(1);
             }
           });
         }
@@ -343,8 +378,8 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     } else if (lastResponse['response'] == 'Sending') {
       setState(() {
         resultSize = lastResponse['size'];
-        setProgress = 0.55;
       });
+      setProgress = 0.55;
       print("Downloading ${lastResponse['size']} bytes");
     } else if (lastResponse['response'] == 'Error') {
       socket!.destroy();
@@ -355,6 +390,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
         connected = false;
         setRunning = false;
       });
+      Navigator.pop(context);
     } else if (lastResponse['response'] == 'MasksResults' ||
         lastResponse['response'] == 'NoMasksResults') {
       ImageExtender? image;
@@ -386,7 +422,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
         var path = DateFormat('yyyyMMdd_HH_mm_ss').format(DateTime.now()) +
             '_server.png';
         await image.saveToTempDir(path);
-        await saveExternal(path);
+        await trySaveExternal(path);
       } else {
         predictResult = null;
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -394,16 +430,27 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
         ));
       }
       setState(() {
+        Navigator.pop(context);
         setProgress = 1.0;
         setRunning = false;
         if (predictResult != null) {
-          _onItemTapped(1);
+          onItemTapped(1);
         }
       });
     }
   }
 
   void listenSocket() {
+    void _resetToDevice() {
+      setState(() {
+        originalIE = null;
+        setProgress = 1.0;
+        inferenceOn = WhereInference.device;
+        connected = false;
+        predictionRunning = false;
+      });
+    }
+
     print(
         'Connected to: ${socket!.remoteAddress.address}:${socket!.remotePort}');
 
@@ -446,28 +493,14 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
       onError: (error) {
         print("onError $error");
         socket!.destroy();
-
-        setState(() {
-          originalIE = null;
-          setProgress = 1.0;
-          inferenceOn = WhereInference.device;
-          connected = false;
-          setRunning = false;
-        });
+        _resetToDevice();
       },
 
       // handle server ending connection
       onDone: () {
         print('Server left. Done');
         socket!.destroy();
-
-        setState(() {
-          originalIE = null;
-          setProgress = 1.0;
-          inferenceOn = WhereInference.device;
-          connected = false;
-          predictionRunning = false;
-        });
+        _resetToDevice();
       },
     );
   }
@@ -487,13 +520,15 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
         title: Text(widget.title),
       ),
       body: WillPopScope(
-          onWillPop: () => Future.sync(onWillPop), child: buildPageView()),
+          onWillPop: () => Future.sync(onWillPop), child: pageView()),
       bottomNavigationBar: Theme(
         data: ThemeData(
           splashColor: predictionRunning ? Colors.transparent : null,
           highlightColor: predictionRunning ? Colors.transparent : null,
         ),
         child: BottomNavigationBar(
+          currentIndex: selectedPage,
+          onTap: onItemTapped,
           selectedItemColor: predictionRunning
               ? Theme.of(context).colorScheme.background
               : Theme.of(context).brightness == Brightness.light
@@ -517,13 +552,11 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
               label: 'Settings',
             ),
           ],
-          currentIndex: _selectedIndex,
-          onTap: _onItemTapped,
         ),
       ),
-      floatingActionButton: _selectedIndex == 0 && !predictionRunning
+      floatingActionButton: selectedPage == 0 && !predictionRunning
           ? FloatingActionButton(
-              onPressed: prediction,
+              onPressed: startPrediction,
               tooltip: 'Pick Image',
               child: Icon(Icons.add_a_photo))
           : null,
@@ -535,20 +568,20 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     if (pageController.page!.round() == pageController.initialPage)
       return true;
     else {
-      _selectedIndex -= 1;
-      pageController.jumpToPage(_selectedIndex);
+      selectedPage -= 1;
+      pageController.jumpToPage(selectedPage);
       return false;
     }
   }
 
-  void _pageChanged(int index) {
+  void pageChanged(int index) {
     setState(() {
-      _selectedIndex = index;
+      selectedPage = index;
     });
   }
 
-  void _onItemTapped(int index) {
-    if (_selectedIndex == 2 && index == 0) {
+  void onItemTapped(int index) {
+    if (selectedPage == 2 && index == 0) {
       var testPicture = prefs.getBool('testPicture') ?? false;
       if (testPicture && controller != null) {
         controller!.dispose();
@@ -560,17 +593,17 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
 
     if (!predictionRunning) {
       setState(() {
-        _selectedIndex = index;
+        selectedPage = index;
         pageController.jumpToPage(index);
       });
     }
   }
 
-  Widget buildPageView() {
+  Widget pageView() {
     return PageView(
       controller: pageController,
       physics: NeverScrollableScrollPhysics(),
-      onPageChanged: _pageChanged,
+      onPageChanged: pageChanged,
       children: [
         cameraPage(),
         MrcnnPage(predictResult, prefs),
@@ -580,59 +613,10 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   }
 
   Widget cameraPage() {
-    var progressMsg = {
-      0.0: "Nothing",
-      0.1: "Taking picture",
-      0.2: "Sending picture",
-      0.3: "Start prediction",
-      0.4: "Waiting for result",
-      0.5: "Running model",
-      0.55: "Receiving result\n(${filesize(resultSize)})",
-      0.6: "Visualizing result",
-      0.7: "Saving picture",
-      0.9: "Rendering picture",
-      1.0: "Done"
-    };
-
     Widget child = Center(child: CircularProgressIndicator());
 
     if (predictionRunning && originalImagePath != null) {
-      child = Stack(
-        alignment: AlignmentDirectional.center,
-        children: [
-          Image.file(File(originalImagePath!)),
-          Container(
-            padding: EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: Theme.of(context).canvasColor,
-              border: Border.all(
-                color: Colors.transparent,
-              ),
-              borderRadius: BorderRadius.all(Radius.circular(20)),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withAlpha(100),
-                  spreadRadius: 5,
-                  blurRadius: 10,
-                  offset: Offset(0, 3), // changes position of shadow
-                ),
-              ],
-            ),
-            child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  CircularProgressIndicator(),
-                  SizedBox(
-                    height: 10,
-                  ),
-                  Text(
-                    progressMsg[predictProgress]!,
-                  ),
-                ]),
-          ),
-        ],
-      );
+      child = Center(child: Image.file(File(originalImagePath!)));
     } else if (!predictionRunning && (prefs.getBool('testPicture') ?? false)) {
       selectedTestImage =
           prefs.getString('selectedTestImage') ?? selectedTestImage;
@@ -676,6 +660,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
       return Stack(
         alignment: AlignmentDirectional.topCenter,
         children: [
+          // TODO: Remove delay with camera & tf lite packages update
           FutureBuilder(
               future: Future.delayed(const Duration(milliseconds: 300)),
               builder: (context, snapshot) {
@@ -717,158 +702,161 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     ];
   }
 
-  Widget connectAlertDialog() {
+  showDisconnectAlertDialog() {
+    showDialog(
+        barrierDismissible: false,
+        context: context,
+        builder: (context) => AlertDialog(
+              title: Text("Disconnect from server?"),
+              actions: [
+                TextButton(
+                  child: Text("No"),
+                  onPressed: () {
+                    setState(() {
+                      inferenceOn = WhereInference.server;
+                    });
+                    Navigator.pop(context);
+                  },
+                ),
+                TextButton(
+                  child: Text("Yes"),
+                  onPressed: () {
+                    socket?.destroy();
+                    setState(() {
+                      connected = false;
+                    });
+                    Navigator.pop(context);
+                  },
+                )
+              ],
+            ));
+  }
+
+  showConnectAlertDialog() async {
     bool connecting = false;
     bool validateIP = true;
     bool validatePort = true;
 
-    return StatefulBuilder(builder: (context, setState) {
-      return AlertDialog(
-        title: connecting
-            ? Row(
+    void _onChangedIP(String value) {
+      if (!validateIP) {
+        setState(() {
+          validateIP = validator.ip(textControllerIP.text);
+        });
+      }
+      serverIP = value;
+    }
+
+    void _onChangedPort(String value) {
+      try {
+        serverPort = int.parse(value);
+        setState(() {
+          validatePort = 0 <= serverPort && serverPort <= 65535;
+        });
+      } on FormatException {
+        setState(() {
+          validatePort = false;
+        });
+      }
+    }
+
+    void _cancel() {
+      setState(() {
+        inferenceOn = WhereInference.device;
+      });
+      Navigator.pop(context);
+    }
+
+    void _connect() async {
+      if (!validator.ip(textControllerIP.text)) {
+        setState(() {
+          validateIP = false;
+        });
+      } else {
+        setState(() {
+          validateIP = true;
+          connecting = true;
+        });
+
+        try {
+          socket = await Socket.connect(serverIP, serverPort,
+              timeout: Duration(seconds: 5));
+          prefs.setString('serverIP', serverIP);
+          listenSocket();
+
+          connected = true;
+          connecting = false;
+        } on SocketException {
+          inferenceOn = WhereInference.device;
+          connecting = false;
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text("Can't connect to server"),
+          ));
+        }
+        Navigator.pop(context);
+      }
+    }
+
+    await showDialog(
+        barrierDismissible: false,
+        context: context,
+        builder: (context) {
+          return StatefulBuilder(builder: (context, setState) {
+            return AlertDialog(
+              title: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text("Connect to server"),
                   SizedBox(
-                      width: 20, height: 20, child: CircularProgressIndicator())
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                          color: connecting ? null : Colors.transparent))
                 ],
-              )
-            : Text("Connect to server"),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: textControllerIP,
-              decoration: InputDecoration(
-                  labelText: "Server IP",
-                  errorText: validateIP ? null : "Wrong IP"),
-              onChanged: (String value) {
-                if (!validateIP) {
-                  setState(() {
-                    validateIP = validator.ip(textControllerIP.text);
-                  });
-                }
-                serverIP = value;
-              },
-            ),
-            TextField(
-              controller: textControllerPort,
-              decoration: InputDecoration(
-                  labelText: "Server port",
-                  errorText: validatePort ? null : "Wrong port"),
-              onChanged: (String value) {
-                try {
-                  serverPort = int.parse(value);
-                  setState(() {
-                    validatePort = true;
-                  });
-                } on FormatException {
-                  setState(() {
-                    validatePort = false;
-                  });
-                }
-              },
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-              onPressed: connecting
-                  ? null
-                  : () {
-                      setState(() {
-                        inferenceOn = WhereInference.device;
-                      });
-                      Navigator.pop(context);
-                    },
-              child: Text("Cancel")),
-          TextButton(
-              onPressed: connecting
-                  ? null
-                  : () async {
-                      print("validator ${validator.ip(textControllerIP.text)}");
-                      if (!validator.ip(textControllerIP.text)) {
-                        setState(() {
-                          validateIP = false;
-                        });
-                      } else {
-                        setState(() {
-                          validateIP = true;
-                          connecting = true;
-                        });
-
-                        try {
-                          socket = await Socket.connect(serverIP, serverPort,
-                              timeout: Duration(seconds: 5));
-                          prefs.setString('serverIP', serverIP);
-                          listenSocket();
-
-                          connected = true;
-                          connecting = false;
-                        } on SocketException {
-                          inferenceOn = WhereInference.device;
-                          connecting = false;
-                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                            content: Text("Can't connect to server"),
-                          ));
-                        }
-                        Navigator.pop(context);
-                      }
-                    },
-              child: Text("OK"))
-        ],
-      );
-    });
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: textControllerIP,
+                    decoration: InputDecoration(
+                        labelText: "Server IP",
+                        errorText: validateIP ? null : "Wrong IP"),
+                    onChanged: _onChangedIP,
+                  ),
+                  TextField(
+                    controller: textControllerPort,
+                    decoration: InputDecoration(
+                        labelText: "Server port",
+                        errorText: validatePort ? null : "Wrong port"),
+                    onChanged: _onChangedPort,
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                    child: Text("Cancel"),
+                    onPressed: connecting ? null : _cancel),
+                TextButton(
+                    child: Text("Connect"),
+                    onPressed: connecting ? null : _connect)
+              ],
+            );
+          });
+        });
   }
 
   void onChangedDeviceServer(WhereInference? value) async {
-    print('$inferenceOn $value');
-
+    setState(() {
+      inferenceOn = value;
+    });
     switch (value) {
       case WhereInference.device:
-        print('inferenceOn device');
-        setState(() {
-          inferenceOn = value;
-        });
         if (connected) {
-          showDialog(
-              barrierDismissible: false,
-              context: context,
-              builder: (context) => AlertDialog(
-                    title: Text("Disconnect from server?"),
-                    actions: [
-                      TextButton(
-                          onPressed: () {
-                            setState(() {
-                              inferenceOn = WhereInference.server;
-                            });
-                            Navigator.pop(context);
-                          },
-                          child: Text("No")),
-                      TextButton(
-                          onPressed: () {
-                            socket?.destroy();
-                            setState(() {
-                              connected = false;
-                            });
-                            Navigator.pop(context);
-                          },
-                          child: Text("Yes"))
-                    ],
-                  ));
+          showDisconnectAlertDialog();
         }
         break;
       case WhereInference.server:
-        print('inferenceOn server');
-        setState(() {
-          inferenceOn = value;
-        });
-        await showDialog(
-            barrierDismissible: false,
-            context: context,
-            builder: (context) {
-              return connectAlertDialog();
-            });
+        await showConnectAlertDialog();
         setState(() {});
         break;
       case null:
