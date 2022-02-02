@@ -4,12 +4,12 @@ import 'dart:async';
 import 'dart:isolate';
 import 'dart:typed_data';
 import 'package:filesize/filesize.dart';
-import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:f_logs/f_logs.dart';
 import 'package:flutter_app/mrcnn/configs.dart';
 import 'package:flutter_app/mrcnn/visualize.dart';
+import 'package:flutter_app/pages/CameraPage.dart';
 import 'package:flutter_app/pages/MrcnnPage.dart';
 import 'package:flutter_app/pages/SettingsPage.dart';
 import 'package:flutter_app/pages/polygon_page/AnnotationPage.dart';
@@ -20,11 +20,10 @@ import 'package:flutter_app/utils/prediction_result.dart';
 import 'package:tflite_flutter/tflite_flutter.dart' as tfl;
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:regexed_validator/regexed_validator.dart';
 
 List<CameraDescription> cameras = [];
-late tfl.Interpreter partsInterpreter;
-late tfl.Interpreter damageInterpreter;
+
+late Map<String, tfl.Interpreter> interpreters;
 late SharedPreferences prefs;
 
 enum WhereInference { device, server }
@@ -35,9 +34,9 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   cameras = await availableCameras();
   prefs = await SharedPreferences.getInstance();
-  partsInterpreter =
+  interpreters['parts'] =
       await tfl.Interpreter.fromAsset('car_parts_smallest_fixed_anno.tflite');
-  damageInterpreter = await tfl.Interpreter.fromAsset('car_damage.tflite');
+  interpreters['damage'] = await tfl.Interpreter.fromAsset('car_damage.tflite');
   initImages();
   runApp(MyApp());
 }
@@ -82,10 +81,8 @@ class MyHomePage extends StatefulWidget {
 }
 
 class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
-  CameraController? controller;
+  CameraController? cameraController;
 
-  String? selectedTestImage =
-      prefs.getString('selectedTestImage') ?? 'car_800_552.jpg';
   ImageExtender? originalIE;
 
   String? newImagePath;
@@ -116,90 +113,38 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   }
 
   WhereInference? inferenceOn = WhereInference.device;
-  String serverIP = '';
-  int serverPort = 65432;
   Socket? socket;
   int resultSize = 0;
   Map lastResponse = Map();
 
-  TextEditingController textControllerIP = TextEditingController();
-  TextEditingController textControllerPort = TextEditingController();
-
-  int selectedPage = 0;
+  int selectedPage = 1;
   PageController pageController = PageController(
-    initialPage: 0,
+    initialPage: 1,
     keepPage: true,
   );
 
-  void initializeCameraController() async {
-    if (controller != null) {
-      await controller!.dispose();
-    }
-    final CameraController cameraController = CameraController(
-      cameras[0],
-      ResolutionPreset.high,
-      enableAudio: false,
-    );
-    controller = cameraController;
-    cameraController.addListener(() {
-      if (mounted) setState(() {});
-      if (cameraController.value.hasError) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text(
-                'Camera error ${cameraController.value.errorDescription}')));
-      }
-    });
-
-    try {
-      await cameraController.initialize();
-    } on CameraException catch (e) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(e.toString())));
-    }
-    if (mounted) {
-      setState(() {});
-    }
-  }
+  bool get testPicture => prefs.getBool('testPicture') ?? false;
 
   @override
   void initState() {
     super.initState();
-    print('initState');
-    serverIP = prefs.getString('serverIP') ?? '';
 
-    textControllerIP.text = serverIP;
-    textControllerPort.text = serverPort.toString();
-
-    var testPicture = prefs.getBool('testPicture') ?? false;
-    if (!testPicture) {
-      initializeCameraController();
-    }
+    initCameraController();
     WidgetsBinding.instance!.addObserver(this);
   }
 
   @override
   void dispose() {
-    textControllerIP.dispose();
-    textControllerPort.dispose();
-    // controller.dispose();
     socket?.close();
-
     WidgetsBinding.instance!.removeObserver(this);
     super.dispose();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    var testPicture = prefs.getBool('testPicture') ?? false;
-    if (testPicture) {
-      controller?.dispose();
-      return;
-    }
-    final CameraController? cameraController = controller;
     // App state changed before we got the chance to initialize.
-    if (cameraController == null || !cameraController.value.isInitialized) {
+    if (cameraController == null || !cameraController!.value.isInitialized)
       return;
-    }
 
     FLog.info(
         className: "ImagePreviewPageState",
@@ -207,10 +152,38 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
         text: "state changed to: $state");
 
     if (state == AppLifecycleState.inactive) {
-      cameraController.dispose();
+      cameraController?.dispose();
     } else if (state == AppLifecycleState.resumed) {
-      initializeCameraController();
+      initCameraController();
     }
+  }
+
+  void initCameraController() async {
+    if (testPicture) return;
+
+    if (cameraController != null) await cameraController!.dispose();
+
+    cameraController = CameraController(
+      cameras[0],
+      ResolutionPreset.high,
+      enableAudio: false,
+    );
+    cameraController!.addListener(() {
+      if (mounted) setState(() {});
+      if (cameraController!.value.hasError) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(
+                'Camera error ${cameraController!.value.errorDescription}')));
+      }
+    });
+
+    try {
+      await cameraController!.initialize();
+    } on CameraException catch (e) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(e.toString())));
+    }
+    if (mounted) setState(() {});
   }
 
   Future trySaveExternal(String path) async {
@@ -223,9 +196,8 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   }
 
   Future takePicture() async {
-    var testPicture = prefs.getBool('testPicture') ?? false;
-    selectedTestImage =
-        prefs.getString('selectedTestImage') ?? selectedTestImage;
+    var selectedTestImage =
+        prefs.getString('selectedTestImage') ?? 'car_800_552.jpg';
 
     if (testPicture) {
       final byteData =
@@ -234,18 +206,15 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
           .asUint8List(byteData.offsetInBytes, byteData.lengthInBytes));
       await originalIE!.saveToTempDir(selectedTestImage);
     } else {
-      XFile file = await controller!.takePicture();
+      XFile file = await cameraController!.takePicture();
       originalIE = ImageExtender.decodeImageFromPath(file.path);
     }
   }
 
   startPrediction() async {
-    if (!(prefs.getBool('testPicture') ?? false) &&
-        (controller == null ||
-            !controller!.value.isInitialized ||
-            predictionRunning)) {
+    /* if (!testPicture) {
       return;
-    }
+    } */
     setProgress = 0.1;
 
     await takePicture();
@@ -291,6 +260,8 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
                 );
               });
         });
+
+    inferenceOn = WhereInference.values[prefs.getInt('inferenceOn') ?? 0];
     switch (inferenceOn) {
       case WhereInference.device:
         predictionDevice();
@@ -307,9 +278,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     setProgress = 0.3;
 
     var modelType = prefs.getString('modelType') ?? 'parts';
-    var address = modelType == 'parts'
-        ? partsInterpreter.address
-        : damageInterpreter.address;
+    var address = interpreters[modelType]!.address;
 
     ReceivePort receivePort = ReceivePort();
     Completer sendPortCompleter = new Completer<SendPort>();
@@ -319,6 +288,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
       if (message is SendPort) {
         sendPortCompleter.complete(message);
       }
+      // TODO: improve
       if (message is List) {
         String action = message[0];
         if (action == 'progress') {
@@ -373,6 +343,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     lastResponse = jsonDecode(String.fromCharCodes(message));
     print("Server: ${lastResponse['response']}");
 
+    // TODO: switch
     if (lastResponse['response'] == 'Downloaded') {
       setProgress = 0.5;
     } else if (lastResponse['response'] == 'Sending') {
@@ -384,6 +355,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     } else if (lastResponse['response'] == 'Error') {
       socket!.destroy();
 
+      prefs.setInt('inferenceOn', WhereInference.device.index);
       setState(() {
         originalIE = null;
         inferenceOn = WhereInference.device;
@@ -442,6 +414,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
 
   void listenSocket() {
     void _resetToDevice() {
+      prefs.setInt('inferenceOn', WhereInference.device.index);
       setState(() {
         originalIE = null;
         setProgress = 1.0;
@@ -478,6 +451,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
           } else {
             msg.addAll(data.sublist(0, msgLen - readLen));
 
+            // TODO: do i really need await?
             await processResponse(msg);
 
             firstMessage = true;
@@ -516,11 +490,12 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: selectedPage == 1 ? Colors.black : null,
       appBar: AppBar(
         title: Text(widget.title),
       ),
       body: WillPopScope(
-          onWillPop: () => Future.sync(onWillPop), child: pageView()),
+          onWillPop: () => Future.sync(onWillPop), child: buildPageView()),
       bottomNavigationBar: Theme(
         data: ThemeData(
           splashColor: predictionRunning ? Colors.transparent : null,
@@ -540,12 +515,15 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
           backgroundColor: Theme.of(context).canvasColor,
           items: [
             BottomNavigationBarItem(
-              icon: Icon(Icons.camera),
-              label: 'Camera',
-            ),
-            BottomNavigationBarItem(
               icon: Icon(Icons.image),
               label: 'Image',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(
+                Icons.camera,
+                color: selectedPage == 1 ? Colors.transparent : null,
+              ),
+              label: 'Camera',
             ),
             BottomNavigationBarItem(
               icon: Icon(Icons.settings),
@@ -554,13 +532,13 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
           ],
         ),
       ),
-      floatingActionButton: selectedPage == 0 && !predictionRunning
+      floatingActionButton: selectedPage == 1
           ? FloatingActionButton(
               onPressed: startPrediction,
               tooltip: 'Pick Image',
-              child: Icon(Icons.add_a_photo))
+              child: Icon(Icons.camera))
           : null,
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
     );
   }
 
@@ -581,13 +559,12 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   }
 
   void onItemTapped(int index) {
-    if (selectedPage == 2 && index == 0) {
-      var testPicture = prefs.getBool('testPicture') ?? false;
-      if (testPicture && controller != null) {
-        controller!.dispose();
-        controller = null;
-      } else if (!testPicture && controller == null) {
-        initializeCameraController();
+    if (selectedPage == 2 && index == 1) {
+      if (testPicture && cameraController != null) {
+        cameraController!.dispose();
+        cameraController = null;
+      } else if (!testPicture && cameraController == null) {
+        initCameraController();
       }
     }
 
@@ -599,268 +576,38 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     }
   }
 
-  Widget pageView() {
+  Widget buildPageView() {
     return PageView(
       controller: pageController,
       physics: NeverScrollableScrollPhysics(),
       onPageChanged: pageChanged,
       children: [
-        cameraPage(),
         MrcnnPage(predictResult, prefs),
+        CameraPage(cameraController, prefs, connectSocket, destroySocket),
         SettingsPage(prefs),
       ],
     );
   }
 
-  Widget cameraPage() {
-    Widget child = Center(child: CircularProgressIndicator());
-
-    if (predictionRunning && originalImagePath != null) {
-      child = Center(child: Image.file(File(originalImagePath!)));
-    } else if (!predictionRunning && (prefs.getBool('testPicture') ?? false)) {
-      selectedTestImage =
-          prefs.getString('selectedTestImage') ?? selectedTestImage;
-      final testImages = prefs.getStringList('testImagesList') ?? [];
-      final List<DropdownMenuItem<String>> dropdownItems = List.generate(
-          testImages.length,
-          (index) => DropdownMenuItem(
-                child: Text(index.toString()),
-                value: testImages[index],
-              ));
-      child = Column(
-        children: [
-          Container(
-              width: double.infinity,
-              // height: double.infinity,
-              color: Theme.of(context).colorScheme.surface,
-              child: Row(
-                children: listTilesDeviceServer +
-                    [
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                        child: DropdownButton(
-                          value: selectedTestImage,
-                          items: dropdownItems,
-                          onChanged: (String? value) {
-                            prefs.setString('selectedTestImage', value!);
-                            setState(() {
-                              selectedTestImage = value;
-                            });
-                          },
-                        ),
-                      )
-                    ],
-              )),
-          Expanded(child: Image.asset('assets/images/$selectedTestImage')),
-        ],
-      );
-    } else if (!predictionRunning &&
-        controller != null &&
-        controller!.value.isInitialized) {
-      return Stack(
-        alignment: AlignmentDirectional.topCenter,
-        children: [
-          // TODO: Remove delay with camera & tf lite packages update
-          FutureBuilder(
-              future: Future.delayed(const Duration(milliseconds: 300)),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.done) {
-                  return CameraPreview(controller!);
-                } else {
-                  return Container(
-                      color: Colors.black,
-                      child: Center(child: CircularProgressIndicator()));
-                }
-              }),
-          Container(
-              width: double.infinity,
-              // height: double.infinity,
-              color: Theme.of(context).colorScheme.surface,
-              child: Row(children: listTilesDeviceServer)),
-        ],
-      );
+  Future<bool> connectSocket(String ip, int port) async {
+    try {
+      socket = await Socket.connect(ip, port, timeout: Duration(seconds: 5));
+      prefs.setString('serverIP', ip);
+      listenSocket();
+      connected = true;
+      return true;
+    } on SocketException {
+      prefs.setInt('inferenceOn', WhereInference.device.index);
+      inferenceOn = WhereInference.device;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text("Can't connect to server"),
+      ));
+      return false;
     }
-    return Container(color: Colors.black, child: child);
   }
 
-  List<Widget> get listTilesDeviceServer {
-    return [
-      Flexible(
-          child: RadioListTile(
-              title: Text("Device"),
-              value: WhereInference.device,
-              groupValue: inferenceOn,
-              onChanged: onChangedDeviceServer)),
-      Flexible(
-        child: RadioListTile(
-            title: Text("Server"),
-            subtitle: connected ? Text("Connected") : Text("Disconnected"),
-            value: WhereInference.server,
-            groupValue: inferenceOn,
-            onChanged: onChangedDeviceServer),
-      ),
-    ];
-  }
-
-  showDisconnectAlertDialog() {
-    showDialog(
-        barrierDismissible: false,
-        context: context,
-        builder: (context) => AlertDialog(
-              title: Text("Disconnect from server?"),
-              actions: [
-                TextButton(
-                  child: Text("No"),
-                  onPressed: () {
-                    setState(() {
-                      inferenceOn = WhereInference.server;
-                    });
-                    Navigator.pop(context);
-                  },
-                ),
-                TextButton(
-                  child: Text("Yes"),
-                  onPressed: () {
-                    socket?.destroy();
-                    setState(() {
-                      connected = false;
-                    });
-                    Navigator.pop(context);
-                  },
-                )
-              ],
-            ));
-  }
-
-  showConnectAlertDialog() async {
-    bool connecting = false;
-    bool validateIP = true;
-    bool validatePort = true;
-
-    void _onChangedIP(String value) {
-      if (!validateIP) {
-        setState(() {
-          validateIP = validator.ip(textControllerIP.text);
-        });
-      }
-      serverIP = value;
-    }
-
-    void _onChangedPort(String value) {
-      try {
-        serverPort = int.parse(value);
-        setState(() {
-          validatePort = 0 <= serverPort && serverPort <= 65535;
-        });
-      } on FormatException {
-        setState(() {
-          validatePort = false;
-        });
-      }
-    }
-
-    void _cancel() {
-      setState(() {
-        inferenceOn = WhereInference.device;
-      });
-      Navigator.pop(context);
-    }
-
-    void _connect() async {
-      if (!validator.ip(textControllerIP.text)) {
-        setState(() {
-          validateIP = false;
-        });
-      } else {
-        setState(() {
-          validateIP = true;
-          connecting = true;
-        });
-
-        try {
-          socket = await Socket.connect(serverIP, serverPort,
-              timeout: Duration(seconds: 5));
-          prefs.setString('serverIP', serverIP);
-          listenSocket();
-
-          connected = true;
-          connecting = false;
-        } on SocketException {
-          inferenceOn = WhereInference.device;
-          connecting = false;
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text("Can't connect to server"),
-          ));
-        }
-        Navigator.pop(context);
-      }
-    }
-
-    await showDialog(
-        barrierDismissible: false,
-        context: context,
-        builder: (context) {
-          return StatefulBuilder(builder: (context, setState) {
-            return AlertDialog(
-              title: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text("Connect to server"),
-                  SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(
-                          color: connecting ? null : Colors.transparent))
-                ],
-              ),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextField(
-                    controller: textControllerIP,
-                    decoration: InputDecoration(
-                        labelText: "Server IP",
-                        errorText: validateIP ? null : "Wrong IP"),
-                    onChanged: _onChangedIP,
-                  ),
-                  TextField(
-                    controller: textControllerPort,
-                    decoration: InputDecoration(
-                        labelText: "Server port",
-                        errorText: validatePort ? null : "Wrong port"),
-                    onChanged: _onChangedPort,
-                  ),
-                ],
-              ),
-              actions: [
-                TextButton(
-                    child: Text("Cancel"),
-                    onPressed: connecting ? null : _cancel),
-                TextButton(
-                    child: Text("Connect"),
-                    onPressed: connecting ? null : _connect)
-              ],
-            );
-          });
-        });
-  }
-
-  void onChangedDeviceServer(WhereInference? value) async {
-    setState(() {
-      inferenceOn = value;
-    });
-    switch (value) {
-      case WhereInference.device:
-        if (connected) {
-          showDisconnectAlertDialog();
-        }
-        break;
-      case WhereInference.server:
-        await showConnectAlertDialog();
-        setState(() {});
-        break;
-      case null:
-        break;
-    }
+  destroySocket() {
+    socket?.destroy();
+    // TODO: do need connected
   }
 }
