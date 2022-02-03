@@ -1,8 +1,6 @@
 import 'dart:ui';
-import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
-import 'Crosshair.dart';
-import 'painters/magnifierPainters.dart';
+import 'painters/MagnifierPainter.dart';
 
 enum MagnifierType { center, top, bottom }
 enum _SidedMagnifierType { center, topLeft, topRight, bottomLeft, bottomRight }
@@ -29,7 +27,7 @@ class Magnifier extends StatefulWidget {
       this.type = MagnifierType.top,
       this.scale = 1.2,
       this.size = 100,
-      this.painter = const CrosshairMagnifierPainter(),
+      this.painter = const MagnifierPainter(),
       Key? key})
       : super(key: key);
 

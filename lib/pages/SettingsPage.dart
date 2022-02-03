@@ -7,19 +7,23 @@ class SettingsPage extends StatefulWidget {
   const SettingsPage(
       {required this.saveExternal,
       required this.testImage,
+      required this.doAnnotate,
       required this.model,
       required this.onSaveExternal,
       required this.onTestImage,
+      required this.onDoAnnotate,
       required this.onModelType,
       Key? key})
       : super(key: key);
 
   final bool saveExternal;
   final bool testImage;
+  final bool doAnnotate;
   final ModelType model;
 
   final Function(bool value) onSaveExternal;
   final Function(bool value) onTestImage;
+  final Function(bool value) onDoAnnotate;
   final Function(ModelType? value) onModelType;
 
   @override
@@ -27,16 +31,10 @@ class SettingsPage extends StatefulWidget {
 }
 
 class _SettingsPageState extends State<SettingsPage> {
-/*   late bool saveImagesToDownloadDir =
-      widget.prefs.getBool('saveToDownloadDir') ?? false;
-  late bool testPicture = widget.prefs.getBool('testPicture') ?? false;
-  late String modelType = widget.prefs.getString('modelType') ?? 'parts';
-  late String selectedTestImage =
-      widget.prefs.getString('selectedTestImage') ?? 'car_800_552.jpg'; */
 
   String cacheDirInfo = 'Calculating...';
   bool deleteEnabled = false;
-  
+
   @override
   void initState() {
     super.initState();
@@ -61,6 +59,12 @@ class _SettingsPageState extends State<SettingsPage> {
               title: Text('Show test image instead of camera'),
               value: widget.testImage,
               onChanged: widget.onTestImage,
+              tileColor: Theme.of(context).colorScheme.surface,
+            ),
+            SwitchListTile(
+              title: Text('Annotate images before inference'),
+              value: widget.doAnnotate,
+              onChanged: widget.onDoAnnotate,
               tileColor: Theme.of(context).colorScheme.surface,
             ),
             ListTile(

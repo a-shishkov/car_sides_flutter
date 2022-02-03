@@ -3,18 +3,15 @@ import 'dart:io';
 import 'dart:async';
 import 'dart:isolate';
 import 'dart:typed_data';
-import 'package:enum_to_string/camel_case_to_words.dart';
 import 'package:enum_to_string/enum_to_string.dart';
-import 'package:filesize/filesize.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:f_logs/f_logs.dart';
 import 'package:flutter_app/mrcnn/configs.dart';
 import 'package:flutter_app/mrcnn/visualize.dart';
 import 'package:flutter_app/pages/CameraPage.dart';
 import 'package:flutter_app/pages/MrcnnPage.dart';
 import 'package:flutter_app/pages/SettingsPage.dart';
-import 'package:flutter_app/pages/polygon_page/AnnotationPage.dart';
+import 'package:flutter_app/pages/annotation_page/AnnotationPage.dart';
 import 'package:flutter_app/utils/ImageExtender.dart';
 import 'package:flutter_app/utils/isolate_utils.dart';
 import 'package:camera/camera.dart';
@@ -26,6 +23,7 @@ import 'package:device_info_plus/device_info_plus.dart';
 
 List<CameraDescription> cameras = [];
 
+bool isPhysical = true;
 Map<ModelType, tfl.Interpreter> interpreters = {};
 late SharedPreferences prefs;
 
@@ -37,10 +35,19 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   cameras = await availableCameras();
   prefs = await SharedPreferences.getInstance();
-  interpreters[ModelType.parts] =
-      await tfl.Interpreter.fromAsset('car_parts_smallest_fixed_anno.tflite');
-  interpreters[ModelType.damage] =
-      await tfl.Interpreter.fromAsset('car_damage.tflite');
+
+  var deviceInfo = DeviceInfoPlugin();
+  var androidInfo = await deviceInfo.androidInfo;
+  isPhysical = androidInfo.isPhysicalDevice ?? false;
+  if (isPhysical) {
+    print('This is real device');
+    interpreters[ModelType.parts] =
+        await tfl.Interpreter.fromAsset('car_parts_smallest_fixed_anno.tflite');
+    interpreters[ModelType.damage] =
+        await tfl.Interpreter.fromAsset('car_damage.tflite');
+  } else {
+    print('This is emulator');
+  }
   initImages();
   runApp(MyApp());
 }
@@ -96,7 +103,10 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
 
   bool testImage = prefs.getBool('testImage') ?? false;
 
+  bool doAnnotate = prefs.getBool('doAnnotate') ?? true;
+
   bool predictDialogShowing = false;
+
   bool get cameraEnabled => !testImage;
 
   List imageItems = prefs.getStringList('testImagesList') ?? [];
@@ -196,15 +206,10 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   }
 
   startPrediction() async {
-    if (inferenceOn == WhereInference.device) {
-      var deviceInfo = DeviceInfoPlugin();
-      var androidInfo = await deviceInfo.androidInfo;
-      if (androidInfo.isPhysicalDevice != null &&
-          !androidInfo.isPhysicalDevice!) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: const Text('Can\'t run prediction on emulator')));
-        return;
-      }
+    if (inferenceOn == WhereInference.device && !isPhysical) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: const Text('Can\'t run prediction on emulator')));
+      return;
     }
 
     if (cameraEnabled) {
@@ -217,10 +222,11 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
         ..path = path
         ..isAsset = true;
     }
-    image!.annotations = await Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => PolygonPage(image: image!)),
-    );
+    if (doAnnotate)
+      image!.annotations = await Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => AnnotationPage(image: image!)),
+      );
 
     predictDialogShowing = true;
     showDialog(
@@ -443,6 +449,13 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
                   testImage = value;
                 });
                 prefs.setBool('testImage', value);
+              },
+              doAnnotate: doAnnotate,
+              onDoAnnotate: (bool value) {
+                setState(() {
+                  doAnnotate = value;
+                });
+                prefs.setBool('doAnnotate', value);
               },
               model: model,
               onModelType: (ModelType? value) {

@@ -4,21 +4,22 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_app/annotation/Annotation.dart';
 import 'package:flutter_app/mrcnn/configs.dart';
-import 'package:flutter_app/pages/polygon_page/Magnifier.dart';
-import 'package:flutter_app/pages/polygon_page/painters/AnnotationPainter.dart';
+import 'package:flutter_app/pages/annotation_page/painters/PolygonPainter.dart';
 import 'package:flutter_app/utils/ImageExtender.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-class PolygonPage extends StatefulWidget {
-  const PolygonPage({Key? key, required this.image}) : super(key: key);
+import 'Magnifier.dart';
+
+class AnnotationPage extends StatefulWidget {
+  const AnnotationPage({Key? key, required this.image}) : super(key: key);
 
   final ImageExtender image;
 
   @override
-  _PolygonPageState createState() => _PolygonPageState();
+  _AnnotationPageState createState() => _AnnotationPageState();
 }
 
-class _PolygonPageState extends State<PolygonPage> {
+class _AnnotationPageState extends State<AnnotationPage> {
   /* List<Offset> _points = [
     Offset(42.7, 120.4),
     Offset(58.0, 95.7),
@@ -74,7 +75,14 @@ class _PolygonPageState extends State<PolygonPage> {
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
+        backgroundColor: Colors.black45,
         title: const Text('Annotation page'),
+        actions: [
+          IconButton(
+              onPressed: showTutorial,
+              tooltip: 'Tutorial',
+              icon: Icon(Icons.help))
+        ],
       ),
       body: Magnifier(
         cursor: _globalCursor,
@@ -90,7 +98,7 @@ class _PolygonPageState extends State<PolygonPage> {
               onLongPressMoveUpdate: onLongPressMoveUpdate,
               onLongPressUp: onLongPressUp,
               child: CustomPaint(
-                foregroundPainter: MyCustomPainter(annotations,
+                foregroundPainter: PolygonPainter(annotations,
                     _currentAnnotationIndex, _selectedPoint, pointRadius),
                 child: widget.image.isAsset
                     ? Image.asset(widget.image.path!, key: _imageKey)
@@ -104,9 +112,9 @@ class _PolygonPageState extends State<PolygonPage> {
         ),
       ),
       bottomNavigationBar: BottomAppBar(
-        color: Colors.black,
+        color: Colors.black45,
         child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             TextButton.icon(
               label: Text('Add'),
@@ -114,17 +122,21 @@ class _PolygonPageState extends State<PolygonPage> {
               onPressed: onAddInstance,
               style: buttonStyle,
             ),
-            TextButton.icon(
-              label: Text('Confirm'),
-              icon: Icon(Icons.check),
-              onPressed: onConfirm,
-              style: buttonStyle,
-            ),
-            TextButton.icon(
-              label: Text('Cancel'),
-              icon: Icon(Icons.close),
-              onPressed: onCancel,
-              style: buttonStyle,
+            Row(
+              children: [
+                TextButton.icon(
+                  label: Text('Confirm'),
+                  icon: Icon(Icons.check),
+                  onPressed: onConfirm,
+                  style: buttonStyle,
+                ),
+                TextButton.icon(
+                  label: Text('Cancel'),
+                  icon: Icon(Icons.close),
+                  onPressed: onCancel,
+                  style: buttonStyle,
+                ),
+              ],
             )
           ],
         ),
@@ -170,12 +182,13 @@ class _PolygonPageState extends State<PolygonPage> {
     print('doubleTap');
     setState(() {
       var index = touchIndex;
-      if (index != null) {
+      if (index != null && index.row == _currentAnnotationIndex) {
         annotations[index.row].polygon.removeAt(index.column);
         if (annotations[index.row].polygon.length <= 0) {
           annotations.removeAt(index.row);
         }
         _selectedPoint = null;
+        return;
       }
 
       print('${_currentAnnotation.polygon.length}');
@@ -262,14 +275,10 @@ class _PolygonPageState extends State<PolygonPage> {
       ));
       return;
     }
-
-    print('${widget.image.size}');
-    print('$_imageKey');
     var scaleX =
         widget.image.size.width / _imageKey.currentContext!.size!.width;
     var scaleY =
         widget.image.size.height / _imageKey.currentContext!.size!.height;
-    print('$scaleX $scaleY');
     for (var anno in annotations) {
       anno.scale(scaleX, scaleY);
     }
@@ -345,5 +354,34 @@ class _PolygonPageState extends State<PolygonPage> {
       return true;
     }
     return false;
+  }
+
+  void showTutorial() {
+    showDialog(
+        context: context,
+        builder: (BuildContext context) {
+          return AlertDialog(
+            title: Text('Tutorial'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('1. You can zoom image'),
+                Text('2. Long Press to add new point'),
+                Text('3. Double click on point to delete it'),
+                Text('4. Add button adds new polygon'),
+                Text('5. Double click on polygon to switch between active'),
+              ],
+            ),
+            actions: [
+              TextButton(
+                child: Text('OK'),
+                onPressed: () {
+                  Navigator.pop(context);
+                },
+              )
+            ],
+          );
+        });
   }
 }
