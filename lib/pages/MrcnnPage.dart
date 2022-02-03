@@ -1,25 +1,27 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter_app/main.dart';
+import 'package:flutter_app/utils/ImageExtender.dart';
 import 'package:flutter_app/utils/prediction_result.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:photo_view/photo_view.dart';
 import '../mrcnn/configs.dart';
 
 class MrcnnPage extends StatelessWidget {
-  final PredictionResult? predictionResult;
-  final SharedPreferences prefs;
-
-  const MrcnnPage(this.predictionResult, this.prefs, {Key? key})
-      : super(key: key);
+  final ImageExtender? image;
+  // final PredictionResult? predictionResult;
+  // final ModelType model;
+  const MrcnnPage(this.image, {Key? key}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
-    if (predictionResult != null &&
-        File(predictionResult!.image.path!).existsSync()) {
-      var path = predictionResult!.image.path!;
-      var classIds = predictionResult!.classIds;
-      var boxes = predictionResult!.boxes;
-      var scores = predictionResult!.scores;
+    if (image != null && image!.prediction != null) {
+      var path = image!.prediction!.image.path!;
+      var isAsset = image!.isAsset;
+      var model = image!.prediction!.model;
+      var classIds = image!.prediction!.classIds;
+      var boxes = image!.prediction!.boxes;
+      var scores = image!.prediction!.scores;
 
       return Container(
         child: ListView.builder(
@@ -33,7 +35,7 @@ class MrcnnPage extends StatelessWidget {
                         onTap: () {
                           Navigator.push(context,
                               MaterialPageRoute(builder: (context) {
-                            return MrcnnImage(path);
+                            return MrcnnImage(path, isAsset);
                           }));
                         },
                         child: Hero(
@@ -48,23 +50,16 @@ class MrcnnPage extends StatelessWidget {
                     )
                   ]);
             } else {
-              var classNames;
-              var modelType = prefs.getString('modelType') ?? 'parts';
-              if (modelType == 'parts') {
-                classNames = CarPartsConfig.CLASS_NAMES;
-              } else if (modelType == 'damage') {
-                classNames = CarDamageConfig.CLASS_NAMES;
-              }
-              var className = classNames[classIds[index - 1]];
+              var className = CLASS_NAMES[model]![classIds[index - 1]];
               className = className[0].toUpperCase() + className.substring(1);
 
               var score = (scores[index - 1] * 100).round();
               return ListTile(
-                title: Text("$className"),
+                title: Text('$className'),
                 subtitle: Text(
-                  "(${boxes[index - 1][1]}, ${boxes[index - 1][0]}); (${boxes[index - 1][3]}, ${boxes[index - 1][2]})",
+                  '(${boxes[index - 1][1]}, ${boxes[index - 1][0]}); (${boxes[index - 1][3]}, ${boxes[index - 1][2]})',
                 ),
-                trailing: Text("$score%"),
+                trailing: Text('$score%'),
               );
             }
           },
@@ -81,7 +76,7 @@ class MrcnnPage extends StatelessWidget {
               color: Colors.grey,
             ),
             Text(
-              'Take a picture first',
+              'Take image first',
               style: TextStyle(color: Colors.grey),
             ),
           ],
@@ -93,8 +88,9 @@ class MrcnnPage extends StatelessWidget {
 
 class MrcnnImage extends StatelessWidget {
   final String path;
+  final bool isAsset;
 
-  const MrcnnImage(this.path, {Key? key}) : super(key: key);
+  const MrcnnImage(this.path, this.isAsset, {Key? key}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {

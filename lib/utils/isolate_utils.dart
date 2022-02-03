@@ -1,4 +1,5 @@
 import 'dart:isolate';
+import 'package:flutter_app/main.dart';
 import 'package:flutter_app/mrcnn/configs.dart';
 import 'package:flutter_app/mrcnn/model.dart';
 import 'package:flutter_app/mrcnn/visualize.dart';
@@ -8,9 +9,9 @@ import 'package:flutter_app/utils/prediction_result.dart';
 class IsolateMsg {
   ImageExtender image;
   int interpreterAddress;
-  String modelType;
+  ModelType model;
 
-  IsolateMsg(this.image, this.interpreterAddress, this.modelType);
+  IsolateMsg(this.image, this.interpreterAddress, this.model);
 }
 
 void predictIsolate(SendPort sendPort) {
@@ -23,40 +24,18 @@ void predictIsolate(SendPort sendPort) {
       ImageExtender image = message.image;
 
       var model = MaskRCNN.fromAddress(message.interpreterAddress);
-      sendPort.send(['progress', 0.5]);
+      sendPort.send('Running model');
       var r = await model.detect(image);
-      sendPort.send(['progress', 0.6]);
 
-      if (r["class_ids"].length > 0) {
-        image = await displayInstances(
-            image,
-            r["rois"],
-            r["masks"],
-            r["class_ids"],
-            message.modelType == 'parts'
-                ? CarPartsConfig.CLASS_NAMES
-                : CarDamageConfig.CLASS_NAMES,
-            scores: r["scores"]);
-        sendPort.send(['result', PredictionResult.fromResult(image, r)]);
+      if (r['class_ids'].length > 0) {
+        sendPort.send('Visualizing result');
+        image = await displayInstances(image, r['rois'], r['masks'],
+            r['class_ids'], CLASS_NAMES[message.model],
+            scores: r['scores']);
+        sendPort.send(PredictionResult.fromResult(image, r, message.model));
       } else {
-        sendPort.send(['result', null]);
+        sendPort.send(null);
       }
     }
   });
-}
-
-Future receiveSend(SendPort port) {
-  ReceivePort response = ReceivePort();
-  port.send(response.sendPort);
-  return response.first;
-}
-
-Future sendReceive(SendPort port, [msg]) {
-  ReceivePort response = ReceivePort();
-  if (msg == null) {
-    port.send(response.sendPort);
-  } else {
-    port.send([msg, response.sendPort]);
-  }
-  return response.first;
 }

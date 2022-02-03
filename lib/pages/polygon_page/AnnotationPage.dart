@@ -92,10 +92,12 @@ class _PolygonPageState extends State<PolygonPage> {
               child: CustomPaint(
                 foregroundPainter: MyCustomPainter(annotations,
                     _currentAnnotationIndex, _selectedPoint, pointRadius),
-                child: Image.file(
-                  File(widget.image.path!),
-                  key: _imageKey,
-                ),
+                child: widget.image.isAsset
+                    ? Image.asset(widget.image.path!, key: _imageKey)
+                    : Image.file(
+                        File(widget.image.path!),
+                        key: _imageKey,
+                      ),
               ),
             ),
           ),
@@ -215,7 +217,6 @@ class _PolygonPageState extends State<PolygonPage> {
       _cursor = details.localPosition;
       _globalCursor = details.globalPosition;
       _selectedPoint = touchIndex;
-      print('index $_selectedPoint');
       if (_selectedPoint == null) {
         _selectedPoint = Position(
             _currentAnnotationIndex, _currentAnnotation.polygon.length);
@@ -262,11 +263,13 @@ class _PolygonPageState extends State<PolygonPage> {
       return;
     }
 
+    print('${widget.image.size}');
+    print('$_imageKey');
     var scaleX =
         widget.image.size.width / _imageKey.currentContext!.size!.width;
     var scaleY =
         widget.image.size.height / _imageKey.currentContext!.size!.height;
-
+    print('$scaleX $scaleY');
     for (var anno in annotations) {
       anno.scale(scaleX, scaleY);
     }

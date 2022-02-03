@@ -3,6 +3,8 @@ import 'dart:io';
 import 'dart:async';
 import 'dart:isolate';
 import 'dart:typed_data';
+import 'package:enum_to_string/camel_case_to_words.dart';
+import 'package:enum_to_string/enum_to_string.dart';
 import 'package:filesize/filesize.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -20,23 +22,25 @@ import 'package:flutter_app/utils/prediction_result.dart';
 import 'package:tflite_flutter/tflite_flutter.dart' as tfl;
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:device_info_plus/device_info_plus.dart';
 
 List<CameraDescription> cameras = [];
 
-late Map<String, tfl.Interpreter> interpreters;
+Map<ModelType, tfl.Interpreter> interpreters = {};
 late SharedPreferences prefs;
 
 enum WhereInference { device, server }
+enum ModelType { damage, parts }
 
 Future<void> main() async {
-  // print('main');
   // debugPrintGestureArenaDiagnostics = true;
   WidgetsFlutterBinding.ensureInitialized();
   cameras = await availableCameras();
   prefs = await SharedPreferences.getInstance();
-  interpreters['parts'] =
+  interpreters[ModelType.parts] =
       await tfl.Interpreter.fromAsset('car_parts_smallest_fixed_anno.tflite');
-  interpreters['damage'] = await tfl.Interpreter.fromAsset('car_damage.tflite');
+  interpreters[ModelType.damage] =
+      await tfl.Interpreter.fromAsset('car_damage.tflite');
   initImages();
   runApp(MyApp());
 }
@@ -83,39 +87,39 @@ class MyHomePage extends StatefulWidget {
 class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   CameraController? cameraController;
 
-  ImageExtender? originalIE;
+  TextEditingController ipController = TextEditingController()
+    ..text = prefs.getString('ip') ?? '';
+  TextEditingController portController = TextEditingController()
+    ..text = prefs.getString('port') ?? '';
 
-  String? newImagePath;
+  bool saveExternal = prefs.getBool('saveExternal') ?? false;
 
-  String? get originalImagePath {
-    if (originalIE != null) {
-      return originalIE!.path;
-    } else {
-      return null;
-    }
-  }
+  bool testImage = prefs.getBool('testImage') ?? false;
 
-  bool predictionRunning = false;
-  set setRunning(bool value) {
-    setState(() {
-      predictionRunning = value;
-    });
-  }
+  bool predictDialogShowing = false;
+  bool get cameraEnabled => !testImage;
 
-  bool connected = false;
+  List imageItems = prefs.getStringList('testImagesList') ?? [];
 
-  PredictionResult? predictResult;
-  ValueNotifier<double> predictProgress = ValueNotifier(0.0);
+  int selectedImage = prefs.getInt('selectedImage') ?? 0;
 
+  ModelType model = ModelType.values[prefs.getInt('model') ?? 0];
+
+  bool socketConnected = false;
+
+  /* ValueNotifier<double> predictProgress = ValueNotifier(0.0);
   set setProgress(double value) {
     print('setProgress');
     predictProgress.value = value;
-  }
+  } */
+  final ValueNotifier<String> predictMessage = ValueNotifier('');
+  set setPredictMessage(String message) => predictMessage.value = message;
 
-  WhereInference? inferenceOn = WhereInference.device;
+  WhereInference inferenceOn = WhereInference.device;
+
   Socket? socket;
+
   int resultSize = 0;
-  Map lastResponse = Map();
 
   int selectedPage = 1;
   PageController pageController = PageController(
@@ -123,18 +127,19 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     keepPage: true,
   );
 
-  bool get testPicture => prefs.getBool('testPicture') ?? false;
+  ImageExtender? image;
 
   @override
   void initState() {
-    super.initState();
-
     initCameraController();
     WidgetsBinding.instance!.addObserver(this);
+    super.initState();
   }
 
   @override
   void dispose() {
+    ipController.dispose();
+    portController.dispose();
     socket?.close();
     WidgetsBinding.instance!.removeObserver(this);
     super.dispose();
@@ -142,14 +147,10 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    print('state changed to: $state');
     // App state changed before we got the chance to initialize.
     if (cameraController == null || !cameraController!.value.isInitialized)
       return;
-
-    FLog.info(
-        className: "ImagePreviewPageState",
-        methodName: "AppState",
-        text: "state changed to: $state");
 
     if (state == AppLifecycleState.inactive) {
       cameraController?.dispose();
@@ -159,8 +160,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   }
 
   void initCameraController() async {
-    if (testPicture) return;
-
+    if (!cameraEnabled) return;
     if (cameraController != null) await cameraController!.dispose();
 
     cameraController = CameraController(
@@ -186,241 +186,158 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     if (mounted) setState(() {});
   }
 
-  Future trySaveExternal(String path) async {
-    if (prefs.getBool('saveToDownloadDir') ?? false) {
-      var imagePath = await predictResult!.image.saveToDownloadDir(path);
+  Future saveResultExternal(String path) async {
+    if (!saveExternal) return;
+    var imagePath = await image?.prediction?.image.saveToDownloadDir(path);
+    if (imagePath != null)
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text("Image saved to $imagePath"),
+        content: Text('Image saved to $imagePath'),
       ));
-    }
-  }
-
-  Future takePicture() async {
-    var selectedTestImage =
-        prefs.getString('selectedTestImage') ?? 'car_800_552.jpg';
-
-    if (testPicture) {
-      final byteData =
-          await rootBundle.load('assets/images/$selectedTestImage');
-      originalIE = ImageExtender.decodeImage(byteData.buffer
-          .asUint8List(byteData.offsetInBytes, byteData.lengthInBytes));
-      await originalIE!.saveToTempDir(selectedTestImage);
-    } else {
-      XFile file = await cameraController!.takePicture();
-      originalIE = ImageExtender.decodeImageFromPath(file.path);
-    }
   }
 
   startPrediction() async {
-    /* if (!testPicture) {
-      return;
-    } */
-    setProgress = 0.1;
+    if (inferenceOn == WhereInference.device) {
+      var deviceInfo = DeviceInfoPlugin();
+      var androidInfo = await deviceInfo.androidInfo;
+      if (androidInfo.isPhysicalDevice != null &&
+          !androidInfo.isPhysicalDevice!) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: const Text('Can\'t run prediction on emulator')));
+        return;
+      }
+    }
 
-    await takePicture();
-
-    originalIE!.annotations = await Navigator.push(
+    if (cameraEnabled) {
+      XFile file = await cameraController!.takePicture();
+      image = ImageExtender.decodeImageFromPath(file.path);
+    } else {
+      var path = 'assets/images/${imageItems[selectedImage]}';
+      final byteData = await rootBundle.load(path);
+      image = ImageExtender.decodeImage(Uint8List.view(byteData.buffer))
+        ..path = path
+        ..isAsset = true;
+    }
+    image!.annotations = await Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) => PolygonPage(image: originalIE!)),
+      MaterialPageRoute(builder: (context) => PolygonPage(image: image!)),
     );
 
-    setRunning = true;
-
-    var progressMsg = {
-      0.0: "Nothing",
-      0.1: "Taking picture",
-      0.2: "Sending picture",
-      0.3: "Start prediction",
-      0.4: "Waiting for result",
-      0.5: "Running model",
-      0.55: "Receiving result (${filesize(resultSize)})",
-      0.6: "Visualizing result",
-      0.7: "Saving picture",
-      0.9: "Rendering picture",
-      1.0: "Done"
-    };
-
+    predictDialogShowing = true;
     showDialog(
         barrierDismissible: false,
         context: context,
         builder: (BuildContext context) {
           return ValueListenableBuilder(
-              valueListenable: predictProgress,
-              builder: (context, value, child) {
+              valueListenable: predictMessage,
+              builder: (BuildContext context, String value, Widget? child) {
                 return AlertDialog(
                   content: Row(
-                    children: [
-                      CircularProgressIndicator(),
-                      SizedBox(
-                        width: 10,
-                      ),
-                      Text(progressMsg[value] ?? 'No text')
-                    ],
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [CircularProgressIndicator(), Text(value)],
                   ),
                 );
               });
-        });
+        }).then((value) => predictDialogShowing = value);
 
-    inferenceOn = WhereInference.values[prefs.getInt('inferenceOn') ?? 0];
     switch (inferenceOn) {
       case WhereInference.device:
-        predictionDevice();
-        break;
-      case WhereInference.server:
-        predictionServer();
-        break;
-      default:
-        break;
-    }
-  }
+        var address = interpreters[model]!.address;
 
-  Future predictionDevice() async {
-    setProgress = 0.3;
+        ReceivePort receivePort = ReceivePort();
+        Completer sendPortCompleter = new Completer<SendPort>();
 
-    var modelType = prefs.getString('modelType') ?? 'parts';
-    var address = interpreters[modelType]!.address;
-
-    ReceivePort receivePort = ReceivePort();
-    Completer sendPortCompleter = new Completer<SendPort>();
-
-    receivePort.listen((message) async {
-      print('<root> $message received');
-      if (message is SendPort) {
-        sendPortCompleter.complete(message);
-      }
-      // TODO: improve
-      if (message is List) {
-        String action = message[0];
-        if (action == 'progress') {
-          setProgress = message[1];
-        } else if (action == 'result') {
-          predictResult = message[1];
-
-          if (predictResult != null) {
-            var path =
-                DateFormat('yyyyMMdd_HH_mm_ss').format(DateTime.now()) + '.png';
-            newImagePath = await predictResult!.image.saveToTempDir(path);
-            await trySaveExternal(path);
-          } else {
+        receivePort.listen((message) async {
+          print('<root> $message received');
+          if (message is SendPort)
+            sendPortCompleter.complete(message);
+          else if (message is String)
+            setPredictMessage = message;
+          else if (message is PredictionResult) {
+            image!.prediction = message;
+            var path = DateFormat('yyyyMMdd_HH_mm_ss').format(DateTime.now()) +
+                '_device.png';
+            await image!.prediction!.image.saveToTempDir(path);
+            saveResultExternal(path);
+            if (predictDialogShowing) Navigator.of(context).pop(false);
+            jumpToPage(0);
+          } else if (message == null) {
+            if (predictDialogShowing) Navigator.of(context).pop(false);
             ScaffoldMessenger.of(context).showSnackBar(SnackBar(
               content: const Text('No instances found'),
             ));
           }
-          Navigator.pop(context);
-          setState(() {
-            setProgress = 1.0;
-            setRunning = false;
-            if (predictResult != null) {
-              onItemTapped(1);
-            }
-          });
+        });
+
+        await Isolate.spawn(predictIsolate, receivePort.sendPort);
+
+        SendPort sendPort = await sendPortCompleter.future;
+        sendPort.send(IsolateMsg(image!, address, model));
+        break;
+
+      case WhereInference.server:
+        void _sendMessage(Uint8List message) {
+          print('messageLength ${message.length}');
+          var msgSize = ByteData(4);
+          msgSize.setInt32(0, message.length);
+          socket!.add(msgSize.buffer.asUint8List());
+          socket!.add(message);
         }
-      }
-    });
 
-    await Isolate.spawn(predictIsolate, receivePort.sendPort);
-
-    SendPort sendPort = await sendPortCompleter.future;
-    sendPort.send(IsolateMsg(originalIE!, address, modelType));
-  }
-
-  predictionServer() async {
-    var imageFile = File(originalImagePath!);
-    var imageBytes = imageFile.readAsBytesSync();
-    var imageEncoded = base64.encode(imageBytes);
-
-    sendMessage(Uint8List.fromList(jsonEncode({
-      'model': prefs.getString('modelType') ?? 'parts',
-      'image': imageEncoded,
-      'annotations': originalIE!.annotations != null
-          ? List.generate(originalIE!.annotations!.length,
-              (index) => originalIE!.annotations![index].toMap)
-          : null
-    }).codeUnits));
+        var imageEncoded = base64.encode(image!.encodeJpg);
+        _sendMessage(Uint8List.fromList(jsonEncode({
+          'model': EnumToString.convertToString(model),
+          'image': imageEncoded,
+          'annotations': image!.mapAnnotations
+        }).codeUnits));
+        break;
+    }
   }
 
   processResponse(List<int> message) async {
-    lastResponse = jsonDecode(String.fromCharCodes(message));
-    print("Server: ${lastResponse['response']}");
+    Map response = jsonDecode(String.fromCharCodes(message));
+    print('Server: ${response['response']}');
 
-    // TODO: switch
-    if (lastResponse['response'] == 'Downloaded') {
-      setProgress = 0.5;
-    } else if (lastResponse['response'] == 'Sending') {
-      setState(() {
-        resultSize = lastResponse['size'];
-      });
-      setProgress = 0.55;
-      print("Downloading ${lastResponse['size']} bytes");
-    } else if (lastResponse['response'] == 'Error') {
-      socket!.destroy();
-
-      prefs.setInt('inferenceOn', WhereInference.device.index);
-      setState(() {
-        originalIE = null;
-        inferenceOn = WhereInference.device;
-        connected = false;
-        setRunning = false;
-      });
-      Navigator.pop(context);
-    } else if (lastResponse['response'] == 'MasksResults' ||
-        lastResponse['response'] == 'NoMasksResults') {
-      ImageExtender? image;
-
-      if (lastResponse['class_ids'].length > 0) {
-        setProgress = 1.0;
-
-        if (lastResponse['response'] == 'MasksResults') {
-          var classNames;
-          var modelType = prefs.getString('modelType') ?? 'parts';
-          if (modelType == 'parts') {
-            classNames = CarPartsConfig.CLASS_NAMES;
-          } else if (modelType == 'damage') {
-            classNames = CarDamageConfig.CLASS_NAMES;
-          }
-
-          image = await displayInstances(originalIE!, lastResponse['rois'],
-              lastResponse['masks'], lastResponse['class_ids'], classNames,
-              scores: lastResponse['scores']);
-
-          setProgress = 0.7;
-          predictResult = PredictionResult.fromResult(image, lastResponse);
-        } else {
-          var imageDecoded = base64Decode(lastResponse['image']);
-          image = ImageExtender.decodeImage(imageDecoded);
-          predictResult = PredictionResult.noMask(image, lastResponse);
-          // lastResponse = Map();
+    switch (response['response']) {
+      case 'Message':
+        print(response['message']);
+        setPredictMessage = response['message'];
+        break;
+      case 'Error':
+        throw SocketException('Server sended error');
+      case 'Results':
+        var img;
+        if (response.containsKey('masks'))
+          img = await displayInstances(image!, response['rois'],
+              response['masks'], response['class_ids'], CLASS_NAMES[model],
+              scores: response['scores']);
+        else {
+          var imageDecoded = base64Decode(response['image']);
+          img = ImageExtender.decodeImage(imageDecoded);
         }
         var path = DateFormat('yyyyMMdd_HH_mm_ss').format(DateTime.now()) +
             '_server.png';
-        await image.saveToTempDir(path);
-        await trySaveExternal(path);
-      } else {
-        predictResult = null;
+        await img.saveToTempDir(path);
+        saveResultExternal(path);
+
+        image!.prediction = PredictionResult.fromResult(img, response, model);
+        if (predictDialogShowing) Navigator.of(context).pop(false);
+        jumpToPage(0);
+        break;
+      case 'NoResults':
+        if (predictDialogShowing) Navigator.of(context).pop(false);
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: const Text('No instances found'),
         ));
-      }
-      setState(() {
-        Navigator.pop(context);
-        setProgress = 1.0;
-        setRunning = false;
-        if (predictResult != null) {
-          onItemTapped(1);
-        }
-      });
+        break;
     }
   }
 
   void listenSocket() {
     void _resetToDevice() {
-      prefs.setInt('inferenceOn', WhereInference.device.index);
       setState(() {
-        originalIE = null;
-        setProgress = 1.0;
+        image = null;
         inferenceOn = WhereInference.device;
-        connected = false;
-        predictionRunning = false;
+        socketConnected = false;
       });
     }
 
@@ -462,15 +379,11 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
           }
         }
       },
-
-      // handle errors
       onError: (error) {
-        print("onError $error");
+        print('onError $error');
         socket!.destroy();
         _resetToDevice();
       },
-
-      // handle server ending connection
       onDone: () {
         print('Server left. Done');
         socket!.destroy();
@@ -479,66 +392,92 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     );
   }
 
-  void sendMessage(Uint8List message) {
-    print('messageLength ${message.length}');
-    var msgSize = ByteData(4);
-    msgSize.setInt32(0, message.length);
-    socket!.add(msgSize.buffer.asUint8List());
-    socket!.add(message);
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      resizeToAvoidBottomInset: false,
       backgroundColor: selectedPage == 1 ? Colors.black : null,
       appBar: AppBar(
         title: Text(widget.title),
       ),
       body: WillPopScope(
-          onWillPop: () => Future.sync(onWillPop), child: buildPageView()),
-      bottomNavigationBar: Theme(
-        data: ThemeData(
-          splashColor: predictionRunning ? Colors.transparent : null,
-          highlightColor: predictionRunning ? Colors.transparent : null,
-        ),
-        child: BottomNavigationBar(
-          currentIndex: selectedPage,
-          onTap: onItemTapped,
-          selectedItemColor: predictionRunning
-              ? Theme.of(context).colorScheme.background
-              : Theme.of(context).brightness == Brightness.light
-                  ? Theme.of(context).colorScheme.primary
-                  : Theme.of(context).colorScheme.secondary,
-          unselectedItemColor: predictionRunning
-              ? Colors.grey[400]
-              : Theme.of(context).unselectedWidgetColor,
-          backgroundColor: Theme.of(context).canvasColor,
-          items: [
-            BottomNavigationBarItem(
-              icon: Icon(Icons.image),
-              label: 'Image',
+        onWillPop: () => Future.sync(onWillPop),
+        child: PageView(
+          controller: pageController,
+          physics: NeverScrollableScrollPhysics(),
+          onPageChanged: (int index) {
+            setState(() {
+              selectedPage = index;
+            });
+
+            if (index == 1)
+              initCameraController();
+            else {
+              cameraController?.dispose();
+              cameraController = null;
+            }
+          },
+          children: [
+            MrcnnPage(image),
+            CameraPage(
+              cameraController: cameraController,
+              cameraEnabled: cameraEnabled,
+              imageItems: imageItems,
+              initialImage: selectedImage,
+              inferenceOn: inferenceOn,
+              onTakePicture: startPrediction,
+              onChangedDevice: changeDevice,
+              onChangedServer: changeServer,
+              onImageChanged: (int index) {
+                selectedImage = index;
+              },
             ),
-            BottomNavigationBarItem(
-              icon: Icon(
-                Icons.camera,
-                color: selectedPage == 1 ? Colors.transparent : null,
-              ),
-              label: 'Camera',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.settings),
-              label: 'Settings',
+            SettingsPage(
+              saveExternal: saveExternal,
+              onSaveExternal: (bool value) {
+                setState(() {
+                  saveExternal = value;
+                });
+                prefs.setBool('saveExternal', value);
+              },
+              testImage: testImage,
+              onTestImage: (bool value) {
+                setState(() {
+                  testImage = value;
+                });
+                prefs.setBool('testImage', value);
+              },
+              model: model,
+              onModelType: (ModelType? value) {
+                setState(() {
+                  model = value!;
+                });
+                prefs.setInt('model', value!.index);
+              },
             ),
           ],
         ),
       ),
-      floatingActionButton: selectedPage == 1
-          ? FloatingActionButton(
-              onPressed: startPrediction,
-              tooltip: 'Pick Image',
-              child: Icon(Icons.camera))
-          : null,
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: selectedPage,
+        onTap: jumpToPage,
+        items: [
+          BottomNavigationBarItem(
+            icon: Icon(Icons.image),
+            label: 'Image',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(
+              Icons.camera,
+            ),
+            label: 'Camera',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.settings),
+            label: 'Settings',
+          ),
+        ],
+      ),
     );
   }
 
@@ -552,62 +491,120 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     }
   }
 
-  void pageChanged(int index) {
+  void jumpToPage(int index) {
     setState(() {
       selectedPage = index;
+      pageController.jumpToPage(index);
     });
   }
 
-  void onItemTapped(int index) {
-    if (selectedPage == 2 && index == 1) {
-      if (testPicture && cameraController != null) {
-        cameraController!.dispose();
-        cameraController = null;
-      } else if (!testPicture && cameraController == null) {
-        initCameraController();
-      }
-    }
+  changeDevice() {
+    print('changeDevice');
+    if (inferenceOn == WhereInference.device) return;
 
-    if (!predictionRunning) {
-      setState(() {
-        selectedPage = index;
-        pageController.jumpToPage(index);
-      });
-    }
-  }
-
-  Widget buildPageView() {
-    return PageView(
-      controller: pageController,
-      physics: NeverScrollableScrollPhysics(),
-      onPageChanged: pageChanged,
-      children: [
-        MrcnnPage(predictResult, prefs),
-        CameraPage(cameraController, prefs, connectSocket, destroySocket),
-        SettingsPage(prefs),
-      ],
-    );
-  }
-
-  Future<bool> connectSocket(String ip, int port) async {
-    try {
-      socket = await Socket.connect(ip, port, timeout: Duration(seconds: 5));
-      prefs.setString('serverIP', ip);
-      listenSocket();
-      connected = true;
-      return true;
-    } on SocketException {
-      prefs.setInt('inferenceOn', WhereInference.device.index);
+    setState(() {
       inferenceOn = WhereInference.device;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text("Can't connect to server"),
-      ));
-      return false;
-    }
+    });
+
+    if (socketConnected)
+      showDialog(
+          barrierDismissible: false,
+          context: context,
+          builder: (context) {
+            return AlertDialog(
+                content: Text('Disconnect from server?'),
+                actions: [
+                  TextButton(
+                    onPressed: () {
+                      setState(() {
+                        inferenceOn = WhereInference.server;
+                      });
+                      Navigator.pop(context);
+                    },
+                    child: Text('No'),
+                  ),
+                  TextButton(
+                    onPressed: () {
+                      socket!.destroy();
+                      setState(() {
+                        socketConnected = false;
+                      });
+                      Navigator.pop(context);
+                    },
+                    child: Text('Yes'),
+                  )
+                ]);
+          });
   }
 
-  destroySocket() {
-    socket?.destroy();
-    // TODO: do need connected
+  changeServer() async {
+    if (inferenceOn == WhereInference.server) return;
+
+    setState(() {
+      inferenceOn = WhereInference.server;
+    });
+
+    var result = await showDialog(
+        context: context,
+        builder: (BuildContext context) {
+          return AlertDialog(
+            scrollable: true,
+            title: const Text('Connect to server'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: ipController,
+                  decoration: InputDecoration(labelText: 'Server IP'),
+                  keyboardType: TextInputType.number,
+                ),
+                TextField(
+                  controller: portController,
+                  decoration: InputDecoration(labelText: 'Server port'),
+                  keyboardType: TextInputType.number,
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  setState(() {
+                    inferenceOn = WhereInference.device;
+                  });
+                  Navigator.pop(context, false);
+                },
+                child: Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(context, true);
+                },
+                child: Text('Connect'),
+              ),
+            ],
+          );
+        });
+    if (!result) return;
+    print('changeServer');
+
+    var ip = ipController.text;
+    var port = int.parse(portController.text);
+
+    Socket.connect(ip, port, timeout: Duration(seconds: 5)).then((value) {
+      socket = value;
+      listenSocket();
+      socketConnected = true;
+
+      prefs.setString('ip', ipController.text);
+      prefs.setString('port', portController.text);
+    }).catchError((e) {
+      print('Socket connect error $e');
+      setState(() {
+        inferenceOn = WhereInference.device;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Can\'t connect to server'),
+      ));
+    });
   }
 }

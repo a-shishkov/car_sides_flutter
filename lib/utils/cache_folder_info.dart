@@ -10,8 +10,8 @@ Future<String?> cacheDirImagesSize() async {
   try {
     var cacheDirList = cacheDir.list();
     await cacheDirList.forEach((f) {
-      if (f is File && extension(f.path) == ".jpg" ||
-          extension(f.path) == ".png") {
+      if (f is File && extension(f.path) == '.jpg' ||
+          extension(f.path) == '.png') {
         totalSize += (f as File).lengthSync();
         totalCount++;
       }
@@ -33,8 +33,8 @@ Future<void> deleteAllImages() async {
   try {
     var cacheDirList = cacheDir.list();
     await cacheDirList.forEach((f) async {
-      if (f is File && extension(f.path) == ".jpg" ||
-          extension(f.path) == ".png") {
+      if (f is File && extension(f.path) == '.jpg' ||
+          extension(f.path) == '.png') {
         await f.delete();
       }
     });

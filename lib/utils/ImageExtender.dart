@@ -1,15 +1,25 @@
 import 'dart:io';
 import 'dart:ui';
+import 'package:flutter/services.dart';
 import 'package:flutter_app/annotation/Annotation.dart';
 import 'package:flutter_app/mrcnn/utils.dart' as utils;
+import 'package:flutter_app/utils/prediction_result.dart';
 import 'package:image/image.dart' as ImagePackage;
 import 'package:tflite_flutter/tflite_flutter.dart';
 import 'package:path_provider/path_provider.dart';
 
 class ImageExtender {
   ImagePackage.Image image;
+  bool isAsset = false;
   String? path;
   List<Annotation>? annotations;
+  PredictionResult? prediction;
+
+  List<Map>? get mapAnnotations {
+    if (annotations != null)
+      return List.generate(
+          annotations!.length, (index) => annotations![index].toMap);
+  }
 
   ImageExtender.decodeImage(List<int> data)
       : image = ImagePackage.decodeImage(data)!;
@@ -29,6 +39,7 @@ class ImageExtender {
       : image = imageExtender.image,
         path = imageExtender.path;
 
+  List<int> get getBytes => image.getBytes(format: ImagePackage.Format.rgb);
   List get imageList {
     return image
         .getBytes(format: ImagePackage.Format.rgb)
@@ -78,13 +89,12 @@ class ImageExtender {
 
   save(path, [refreshPath = true]) async {
     await File(path).writeAsBytes(encodeJpg);
-    if (refreshPath) {
-      this.path = path;
-    }
+    if (refreshPath) this.path = path;
+
     return path;
   }
 
-  saveToTempDir(path) async {
+  saveToTempDir(String path) async {
     return await save((await getTemporaryDirectory()).path + '/' + path);
   }
 

@@ -1,3 +1,5 @@
+import 'package:flutter_app/main.dart';
+
 class CarPartsConfig {
   static const List<int> BACKBONE_STRIDES = [4, 8, 16, 32, 64];
   static const int IMAGE_MAX_DIM = 512;
@@ -35,3 +37,8 @@ class CarDamageConfig {
   static const int RPN_ANCHOR_STRIDE = 1;
   static const List<String> CLASS_NAMES = ['BG', 'damage'];
 }
+
+const Map<ModelType, List<String>> CLASS_NAMES = {
+  ModelType.damage: CarDamageConfig.CLASS_NAMES,
+  ModelType.parts: CarPartsConfig.CLASS_NAMES
+};

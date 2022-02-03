@@ -33,15 +33,15 @@ class MaskRCNN {
         minScale: CarPartsConfig.IMAGE_MIN_SCALE,
         mode: CarPartsConfig.IMAGE_RESIZE_MODE);
 
-    List moldedImage = moldImage((resize["image"] as ImageExtender).imageList);
+    List moldedImage = moldImage((resize['image'] as ImageExtender).imageList);
 
     var imageMeta = composeImageMeta(0, [image.height, image.width, 3],
-        moldedImage.shape, resize["window"], resize["scale"]);
+        moldedImage.shape, resize['window'], resize['scale']);
 
     return {
-      "molded_images": [moldedImage],
-      "image_metas": [imageMeta],
-      "windows": [resize["window"]]
+      'molded_images': [moldedImage],
+      'image_metas': [imageMeta],
+      'windows': [resize['window']]
     };
   }
 
@@ -128,13 +128,13 @@ class MaskRCNN {
   detect(ImageExtender image) async {
     var mold = await moldInputs(ImageExtender.from(image));
 
-    var anchors = [await getAnchors(mold["molded_images"]!.shape.sublist(1))];
+    var anchors = [await getAnchors(mold['molded_images']!.shape.sublist(1))];
 
-    var inputs = [mold["molded_images"]!, mold["image_metas"]!, anchors];
+    var inputs = [mold['molded_images']!, mold['image_metas']!, anchors];
     var outputTensors = getOutputTensors();
 
-    var outputShapes = outputTensors["output_shapes"];
-    var outputs = outputTensors["outputs"];
+    var outputShapes = outputTensors['output_shapes'];
+    var outputs = outputTensors['outputs'];
 
     interpreter.runForMultipleInputs(inputs, outputs);
 
@@ -145,14 +145,14 @@ class MaskRCNN {
         detectionsList[0],
         mrcnnMaskList[0],
         image.imageList.shape,
-        mold["molded_images"]!.shape.sublist(1),
-        mold["windows"]![0]);
+        mold['molded_images']!.shape.sublist(1),
+        mold['windows']![0]);
 
     var result = {
-      "rois": unmold[0],
-      "class_ids": unmold[1],
-      "scores": unmold[2],
-      "masks": unmold[3]
+      'rois': unmold[0],
+      'class_ids': unmold[1],
+      'scores': unmold[2],
+      'masks': unmold[3]
     };
     return result;
   }
@@ -176,7 +176,7 @@ class MaskRCNN {
         outputs[i] = TensorBufferFloat(outputShapes[i]).buffer;
     }
 
-    return {"output_shapes": outputShapes, "outputs": outputs};
+    return {'output_shapes': outputShapes, 'outputs': outputs};
   }
 
   Future<List> getAnchors(List imageShape) async {

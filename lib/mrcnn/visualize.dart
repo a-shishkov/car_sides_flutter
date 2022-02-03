@@ -38,7 +38,7 @@ Future<ImageExtender> displayInstances(ImageExtender originalImage, List boxes, 
     colors,
     captions}) async{
 /*  if (boxes.isEmpty) {
-    print("No instances to display");
+    print('No instances to display');
     return null;
   }*/
   var N = boxes.shape[0];

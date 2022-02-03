@@ -1,35 +1,49 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_app/main.dart';
 import 'package:flutter_app/utils/cache_folder_info.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:enum_to_string/enum_to_string.dart';
 
 class SettingsPage extends StatefulWidget {
-  final SharedPreferences prefs;
+  const SettingsPage(
+      {required this.saveExternal,
+      required this.testImage,
+      required this.model,
+      required this.onSaveExternal,
+      required this.onTestImage,
+      required this.onModelType,
+      Key? key})
+      : super(key: key);
 
-  const SettingsPage(this.prefs, {Key? key}) : super(key: key);
+  final bool saveExternal;
+  final bool testImage;
+  final ModelType model;
+
+  final Function(bool value) onSaveExternal;
+  final Function(bool value) onTestImage;
+  final Function(ModelType? value) onModelType;
 
   @override
   _SettingsPageState createState() => _SettingsPageState();
 }
 
 class _SettingsPageState extends State<SettingsPage> {
-  late bool saveImagesToDownloadDir =
+/*   late bool saveImagesToDownloadDir =
       widget.prefs.getBool('saveToDownloadDir') ?? false;
   late bool testPicture = widget.prefs.getBool('testPicture') ?? false;
   late String modelType = widget.prefs.getString('modelType') ?? 'parts';
   late String selectedTestImage =
-      widget.prefs.getString('selectedTestImage') ?? 'car_800_552.jpg';
+      widget.prefs.getString('selectedTestImage') ?? 'car_800_552.jpg'; */
 
-  String cacheDirInfo = "Calculating...";
-
+  String cacheDirInfo = 'Calculating...';
+  bool deleteEnabled = false;
+  
   @override
   void initState() {
-    // _initImages();
     super.initState();
   }
 
   @override
   Widget build(BuildContext context) {
-    bool deleteEnabled = true;
     return Container(
       alignment: Alignment.center,
       child: ListView(
@@ -39,81 +53,48 @@ class _SettingsPageState extends State<SettingsPage> {
           tiles: [
             SwitchListTile(
               title: Text('Save photos to download dir'),
-              value: saveImagesToDownloadDir,
-              onChanged: (bool value) {
-                widget.prefs.setBool('saveToDownloadDir', value);
-                setState(() {
-                  saveImagesToDownloadDir = value;
-                });
-              },
+              value: widget.saveExternal,
+              onChanged: widget.onSaveExternal,
               tileColor: Theme.of(context).colorScheme.surface,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.all(Radius.circular(0))),
             ),
             SwitchListTile(
-              title: Text('Show test picture instead of camera'),
-              value: testPicture,
-              onChanged: (bool value) {
-                widget.prefs.setBool('testPicture', value);
-                setState(() {
-                  testPicture = value;
-                });
-              },
+              title: Text('Show test image instead of camera'),
+              value: widget.testImage,
+              onChanged: widget.onTestImage,
               tileColor: Theme.of(context).colorScheme.surface,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.all(Radius.circular(0))),
             ),
             ListTile(
-              title: Text("Model type"),
-              // TODO: create dropdownbutton list
-              trailing: DropdownButton(
-                value: modelType,
-                items: [
-                  DropdownMenuItem(
-                    child: Text('parts'),
-                    value: 'parts',
-                  ),
-                  DropdownMenuItem(
-                    child: Text('damage'),
-                    value: 'damage',
-                  )
-                ],
-                onChanged: (String? value) {
-                  widget.prefs.setString('modelType', value!);
-                  setState(() {
-                    modelType = value;
-                  });
-                },
-              ),
+              title: Text('Model type'),
               tileColor: Theme.of(context).colorScheme.surface,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.all(Radius.circular(0))),
+              trailing: DropdownButton(
+                value: widget.model,
+                items: ModelType.values
+                    .map((model) => DropdownMenuItem(
+                        child: Text(EnumToString.convertToString(model,
+                            camelCase: true)),
+                        value: model))
+                    .toList(),
+                onChanged: widget.onModelType,
+              ),
             ),
             FutureBuilder(
               future: cacheDirImagesSize(),
               builder: (context, snapshot) {
-                cacheDirInfo =
-                    widget.prefs.getString('cacheDirInfo') ?? 'Calculating...';
                 if (snapshot.connectionState == ConnectionState.done) {
-                  if (snapshot.data.toString() == "0 items") {
-                    deleteEnabled = false;
-                  } else {
-                    deleteEnabled = true;
-                  }
                   cacheDirInfo = snapshot.data.toString();
-                  widget.prefs
-                      .setString('cacheDirInfo', snapshot.data.toString());
+                  deleteEnabled = cacheDirInfo == '0 items' ? false : true;
                 }
                 return ListTile(
                   enabled: deleteEnabled,
+                  title: Text('Delete all photos'),
+                  subtitle: Text(cacheDirInfo),
+                  tileColor: Theme.of(context).colorScheme.surface,
                   trailing: Icon(
                     Icons.delete,
                     color: deleteEnabled
                         ? Theme.of(context).colorScheme.primary
                         : Colors.grey,
                   ),
-                  title: Text('Delete all photos'),
-                  subtitle: Text(cacheDirInfo),
                   onTap: () {
                     showDialog<String>(
                       barrierDismissible: false,
@@ -124,12 +105,12 @@ class _SettingsPageState extends State<SettingsPage> {
                             const Text('Delete all files in cache folder?'),
                         actions: <Widget>[
                           TextButton(
-                            onPressed: () => Navigator.pop(context, 'No'),
+                            onPressed: () => Navigator.pop(context),
                             child: const Text('No'),
                           ),
                           TextButton(
                             onPressed: () async {
-                              Navigator.pop(context, 'Yes');
+                              Navigator.pop(context);
                               await deleteAllImages();
                               setState(() {});
                             },
@@ -143,9 +124,6 @@ class _SettingsPageState extends State<SettingsPage> {
                       ),
                     );
                   },
-                  tileColor: Theme.of(context).colorScheme.surface,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.all(Radius.circular(0))),
                 );
               },
             ),

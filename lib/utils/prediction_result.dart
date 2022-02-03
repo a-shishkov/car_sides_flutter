@@ -1,3 +1,5 @@
+import 'package:flutter_app/main.dart';
+
 import 'ImageExtender.dart';
 
 class PredictionResult {
@@ -6,18 +8,19 @@ class PredictionResult {
   List? masks;
   List classIds;
   List scores;
+  ModelType model;
 
-  PredictionResult(this.image, this.boxes, this.masks, this.classIds,
-      this.scores);
+  PredictionResult(
+      {required this.image,
+      required this.boxes,
+      this.masks,
+      required this.classIds,
+      required this.scores,
+      required this.model});
 
-  PredictionResult.fromResult(this.image, result)
+  PredictionResult.fromResult(this.image, Map result, this.model)
       : this.boxes = result['rois'],
-        this.masks = result['masks'],
         this.classIds = result['class_ids'],
-        this.scores = result['scores'];
-
-  PredictionResult.noMask(this.image, result)
-      : this.boxes = result['rois'],
-        this.classIds = result['class_ids'],
-        this.scores = result['scores'];
+        this.scores = result['scores'],
+        this.masks = result['masks'];
 }

@@ -4,7 +4,7 @@ import 'package:tflite_flutter/tflite_flutter.dart';
 import 'package:image/image.dart';
 
 Future<Map> resizeImage(ImageExtender image,
-    {minDim, maxDim, minScale, mode = "square"}) async {
+    {minDim, maxDim, minScale, mode = 'square'}) async {
   int h = image.height;
   int w = image.width;
 
@@ -17,13 +17,13 @@ Future<Map> resizeImage(ImageExtender image,
   ];
   var crop;
 
-  if (mode == "none") {
+  if (mode == 'none') {
     return {
-      "image": image,
-      "window": window,
-      "scale": scale,
-      "padding": padding,
-      "crop": crop
+      'image': image,
+      'window': window,
+      'scale': scale,
+      'padding': padding,
+      'crop': crop
     };
   }
 
@@ -37,14 +37,14 @@ Future<Map> resizeImage(ImageExtender image,
   // Does it exceed max dim?
   int imageMax;
 
-  if (maxDim != null && mode == "square") {
+  if (maxDim != null && mode == 'square') {
     imageMax = max(h, w);
     if ((imageMax * scale) > maxDim) {
       scale = maxDim / imageMax;
     }
   }
 
-  if (mode == "square") {
+  if (mode == 'square') {
     if (max(h, w) == h) {
       int newWidth = (w * scale).round();
 
@@ -83,11 +83,11 @@ Future<Map> resizeImage(ImageExtender image,
   }
 
   return {
-    "image": image,
-    "window": window,
-    "scale": scale,
-    "padding": padding,
-    "crop": crop
+    'image': image,
+    'window': window,
+    'scale': scale,
+    'padding': padding,
+    'crop': crop
   };
 }
 
