@@ -302,8 +302,6 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
         print(response['message']);
         setPredictMessage = response['message'];
         break;
-      case 'Error':
-        throw SocketException('Server sended error');
       case 'Results':
         var img;
         if (response.containsKey('masks'))
@@ -323,7 +321,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
         if (predictDialogShowing) Navigator.of(context).pop(false);
         jumpToPage(0);
         break;
-      case 'NoResults':
+      case 'No results':
         if (predictDialogShowing) Navigator.of(context).pop(false);
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: const Text('No instances found'),
@@ -368,8 +366,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
           } else {
             msg.addAll(data.sublist(0, msgLen - readLen));
 
-            // TODO: do i really need await?
-            await processResponse(msg);
+            processResponse(msg);
 
             firstMessage = true;
             if (data.length + readLen == msgLen) {
@@ -544,67 +541,83 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
       inferenceOn = WhereInference.server;
     });
 
-    var result = await showDialog(
+    var socketConnecting = false;
+    await showDialog(
+        barrierDismissible: false,
         context: context,
         builder: (BuildContext context) {
-          return AlertDialog(
-            scrollable: true,
-            title: const Text('Connect to server'),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: ipController,
-                  decoration: InputDecoration(labelText: 'Server IP'),
-                  keyboardType: TextInputType.number,
+          return StatefulBuilder(
+              builder: (BuildContext context, setDialogState) {
+            return AlertDialog(
+              scrollable: true,
+              title: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text('Connect to server'),
+                  SizedBox(
+                      width: 10,
+                      height: 10,
+                      child:
+                          socketConnecting ? CircularProgressIndicator() : null)
+                ],
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: ipController,
+                    decoration: InputDecoration(labelText: 'Server IP'),
+                    keyboardType: TextInputType.number,
+                  ),
+                  TextField(
+                    controller: portController,
+                    decoration: InputDecoration(labelText: 'Server port'),
+                    keyboardType: TextInputType.number,
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    setState(() {
+                      inferenceOn = WhereInference.device;
+                    });
+                    Navigator.pop(context);
+                  },
+                  child: Text('Cancel'),
                 ),
-                TextField(
-                  controller: portController,
-                  decoration: InputDecoration(labelText: 'Server port'),
-                  keyboardType: TextInputType.number,
+                TextButton(
+                  onPressed: () async {
+                    var ip = ipController.text;
+                    var port = int.parse(portController.text);
+                    setDialogState(() {
+                      socketConnecting = true;
+                    });
+                    await Socket.connect(ip, port,
+                            timeout: Duration(seconds: 5))
+                        .then((value) {
+                      socket = value;
+                      listenSocket();
+                      socketConnected = true;
+
+                      prefs.setString('ip', ip);
+                      prefs.setString('port', port.toString());
+                    }).catchError((e) {
+                      print('Socket connect error $e');
+                      setState(() {
+                        inferenceOn = WhereInference.device;
+                      });
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                        content: Text('Can\'t connect to server'),
+                      ));
+                    });
+                    Navigator.pop(context);
+                  },
+                  child: Text('Connect'),
                 ),
               ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () {
-                  setState(() {
-                    inferenceOn = WhereInference.device;
-                  });
-                  Navigator.pop(context, false);
-                },
-                child: Text('Cancel'),
-              ),
-              TextButton(
-                onPressed: () {
-                  Navigator.pop(context, true);
-                },
-                child: Text('Connect'),
-              ),
-            ],
-          );
+            );
+          });
         });
-    if (!result) return;
-    print('changeServer');
-
-    var ip = ipController.text;
-    var port = int.parse(portController.text);
-
-    Socket.connect(ip, port, timeout: Duration(seconds: 5)).then((value) {
-      socket = value;
-      listenSocket();
-      socketConnected = true;
-
-      prefs.setString('ip', ipController.text);
-      prefs.setString('port', portController.text);
-    }).catchError((e) {
-      print('Socket connect error $e');
-      setState(() {
-        inferenceOn = WhereInference.device;
-      });
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Can\'t connect to server'),
-      ));
-    });
   }
 }

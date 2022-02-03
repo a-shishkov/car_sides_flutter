@@ -107,7 +107,7 @@ class _CameraPageState extends State<CameraPage> {
                             backgroundColor: Colors.white)
                         : TextButton.styleFrom(
                             primary: Colors.grey[900],
-                            backgroundColor: Colors.grey[800]),
+                            backgroundColor: Colors.grey),
                     child: Text('Device'),
                   ),
                 ),
@@ -134,7 +134,7 @@ class _CameraPageState extends State<CameraPage> {
                               backgroundColor: Colors.white)
                           : TextButton.styleFrom(
                               primary: Colors.grey[900],
-                              backgroundColor: Colors.grey[700]),
+                              backgroundColor: Colors.grey),
                       child: Text('Server')),
                 ),
               ),
