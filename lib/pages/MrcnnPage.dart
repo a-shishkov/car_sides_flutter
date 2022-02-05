@@ -1,9 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:flutter_app/main.dart';
 import 'package:flutter_app/utils/ImageExtender.dart';
-import 'package:flutter_app/utils/prediction_result.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:photo_view/photo_view.dart';
 import '../mrcnn/configs.dart';
 

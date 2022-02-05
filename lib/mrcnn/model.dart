@@ -7,12 +7,11 @@ import 'package:collection/collection.dart';
 
 //  Utility Functions
 List computeBackboneShapes(List imageShape, List<int> backboneStrides) {
-  var output = [];
-  for (var value in backboneStrides)
-    output
-        .add([(imageShape[0] / value).ceil(), (imageShape[1] / value).ceil()]);
-
-  return output;
+  return List.generate(
+      backboneStrides.length,
+      (i) =>
+          List.generate(2, (j) => (imageShape[j] / backboneStrides[i]).ceil()),
+      growable: false);
 }
 
 class MaskRCNN {
@@ -26,8 +25,8 @@ class MaskRCNN {
   MaskRCNN.fromAddress(int address)
       : interpreter = Interpreter.fromAddress(address);
 
-  Future<Map<String, List>> moldInputs(ImageExtender image) async {
-    var resize = await resizeImage(ImageExtender.from(image),
+  Map<String, List> moldInputs(ImageExtender image) {
+    var resize = resizeImage(ImageExtender.from(image),
         minDim: CarPartsConfig.IMAGE_MIN_DIM,
         maxDim: CarPartsConfig.IMAGE_MAX_DIM,
         minScale: CarPartsConfig.IMAGE_MIN_SCALE,
@@ -45,8 +44,8 @@ class MaskRCNN {
     };
   }
 
-  Future<List> unmoldDetections(detections, List mrcnnMask, originalImageShape,
-      imageShape, window) async {
+  List unmoldDetections(
+      detections, List mrcnnMask, originalImageShape, imageShape, window) {
     var N = detections.length;
     for (var i = 0; i < detections.length; i++) {
       if (detections[i][4] == 0) {
@@ -54,27 +53,18 @@ class MaskRCNN {
         break;
       }
     }
-    var boxes = [];
-    var classIDs = [];
-    var scores = [];
-    List masks = [];
 
-    if (N == 0) return [boxes, classIDs, scores, masks];
+    if (N == 0) return List.filled(4, List.empty());
 
-    for (var i = 0; i < N; i++) {
-      boxes.add(List.generate(4, (j) => detections[i][j]));
-      classIDs.add(detections[i][4].toInt());
-      scores.add(detections[i][5]);
-      var tempList = [];
-      for (var j = 0; j < mrcnnMask[i].length; j++) {
-        var tempList2 = [];
-        for (var k = 0; k < mrcnnMask[i][j].length; k++) {
-          tempList2.add(mrcnnMask[i][j][k][classIDs[i]]);
-        }
-        tempList.add(tempList2);
-      }
-      masks.add(tempList);
-    }
+    var classIDs = List.generate(N, (i) => detections[i][4].toInt());
+    var scores = List.generate(N, (i) => detections[i][5]);
+    var masks = List.generate(
+        N,
+        (i) => List.generate(
+            mrcnnMask[i].length,
+            (j) => List.generate(mrcnnMask[i][j].length,
+                (k) => mrcnnMask[i][j][k][classIDs[i]])));
+
     window = normBoxes([window], imageShape)[0];
     var wy1 = window[0];
     var wx1 = window[1];
@@ -84,37 +74,34 @@ class MaskRCNN {
     var wh = wy2 - wy1;
     var ww = wx2 - wx1;
     var scale = [wh, ww, wh, ww];
-    for (var i = 0; i < boxes.shape[0]; i++) {
-      for (var j = 0; j < boxes.shape[1]; j++) {
-        boxes[i][j] = (boxes[i][j] - shift[j]) / scale[j];
-      }
-    }
+
+    var boxes = List.generate(
+        N,
+        (i) =>
+            List.generate(4, (j) => (detections[i][j] - shift[j]) / scale[j]));
     boxes = denormBoxes(boxes, originalImageShape);
 
-    // Checking for simi lar results
-    Function eq = const ListEquality().equals;
-    var boxesOutput = [];
+    // Checking for similar results
+    List<List> noDuplicateBoxes = [];
     var equals = false;
     for (var box in boxes) {
-      for (var boxOut in boxesOutput) {
-        if (eq(box, boxOut)) {
+      for (var noDuplicateBox in noDuplicateBoxes) {
+        if (ListEquality().equals(box, noDuplicateBox)) {
           equals = true;
           break;
         }
       }
       if (!equals)
-        boxesOutput.add(box);
+        noDuplicateBoxes.add(box);
       else
         equals = false;
     }
-    boxes = boxesOutput;
+    boxes = noDuplicateBoxes;
     N = boxes.length;
 
-    List fullMasks = [];
-    for (var i = 0; i < N; i++) {
-      var fullMask = await unmoldMask(masks[i], boxes[i], originalImageShape);
-      fullMasks.add(fullMask);
-    }
+    List fullMasks = List.generate(
+        N, (i) => unmoldMask(masks[i], boxes[i], originalImageShape));
+
     List stackedFullMask = List.generate(
         originalImageShape[0],
         (i) => List.generate(
@@ -125,10 +112,10 @@ class MaskRCNN {
     return [boxes, classIDs, scores, stackedFullMask];
   }
 
-  detect(ImageExtender image) async {
-    var mold = await moldInputs(ImageExtender.from(image));
+  detect(ImageExtender image) {
+    var mold = moldInputs(ImageExtender.from(image));
 
-    var anchors = [await getAnchors(mold['molded_images']!.shape.sublist(1))];
+    var anchors = [getAnchors(mold['molded_images']!.shape.sublist(1))];
 
     var inputs = [mold['molded_images']!, mold['image_metas']!, anchors];
     var outputTensors = getOutputTensors();
@@ -141,7 +128,7 @@ class MaskRCNN {
     List detectionsList = detections.getDoubleList().reshape(outputShapes[3]);
     List mrcnnMaskList = mrcnnMask.getDoubleList().reshape(outputShapes[4]);
 
-    var unmold = await unmoldDetections(
+    var unmold = unmoldDetections(
         detectionsList[0],
         mrcnnMaskList[0],
         image.imageList.shape,
@@ -179,17 +166,17 @@ class MaskRCNN {
     return {'output_shapes': outputShapes, 'outputs': outputs};
   }
 
-  Future<List> getAnchors(List imageShape) async {
-    // Directory appDocumentsDirectory = await getApplicationDocumentsDirectory();
-    // String appDocumentsPath = appDocumentsDirectory.path;
-    //
-    // var filename = '$appDocumentsPath/anchors';
-    // for (var shape in imageShape) filename += '_$shape';
-    // filename += '.json';
-    // if (await File(filename).exists()) {
-    //   print('Anchors exist');
-    //   return jsonDecode(await File(filename).readAsString());
-    // }
+  List getAnchors(List imageShape) {
+    /* Directory appDocumentsDirectory = await getApplicationDocumentsDirectory();
+    String appDocumentsPath = appDocumentsDirectory.path;
+    
+    var filename = '$appDocumentsPath/anchors';
+    for (var shape in imageShape) filename += '_$shape';
+    filename += '.json';
+    if (await File(filename).exists()) {
+      print('Anchors exist');
+      return jsonDecode(await File(filename).readAsString());
+    } */
     // TODO: cache anchors
     var backboneShapes =
         computeBackboneShapes(imageShape, CarPartsConfig.BACKBONE_STRIDES);

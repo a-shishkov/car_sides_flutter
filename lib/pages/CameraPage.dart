@@ -1,11 +1,8 @@
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_app/main.dart';
-import 'package:flutter_app/utils/ImageExtender.dart';
 import 'package:photo_view/photo_view.dart';
 import 'package:photo_view/photo_view_gallery.dart';
-import 'package:regexed_validator/regexed_validator.dart';
 
 class CameraPage extends StatefulWidget {
   const CameraPage(

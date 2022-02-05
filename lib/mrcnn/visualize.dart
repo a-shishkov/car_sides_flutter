@@ -1,7 +1,6 @@
 import 'package:flutter_app/utils/ImageExtender.dart';
 import 'package:tflite_flutter/tflite_flutter.dart';
 import 'package:image/image.dart' as ImagePackage;
-import 'dart:ui';
 import 'package:flutter/material.dart';
 
 randomColors(N, [bright = true]) {
@@ -29,14 +28,9 @@ ImageExtender applyMask(ImageExtender maskedImage, List mask, Color color,
   return maskedImage;
 }
 
-Future<ImageExtender> displayInstances(ImageExtender originalImage, List boxes, List masks,
-    List classIds, classNames,
-    {scores,
-    title,
-    showMask = true,
-    showBbox = true,
-    colors,
-    captions}) async{
+ImageExtender displayInstances(ImageExtender originalImage, List boxes,
+    List masks, List classIds, classNames,
+    {scores, title, showMask = true, showBbox = true, colors, captions}) {
 /*  if (boxes.isEmpty) {
     print('No instances to display');
     return null;
@@ -59,7 +53,8 @@ Future<ImageExtender> displayInstances(ImageExtender originalImage, List boxes, 
     originalImage.drawRect(x1, y1, x2, y2,
         ImagePackage.getColor(color.red, color.green, color.blue));
 
-    var mask = List.generate(masks.shape[0], (j) => List.generate(masks.shape[1], (k) => masks[j][k][i]));
+    var mask = List.generate(masks.shape[0],
+        (j) => List.generate(masks.shape[1], (k) => masks[j][k][i]));
     if (showMask) {
       originalImage = applyMask(originalImage, mask, color);
     }

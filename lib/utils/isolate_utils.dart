@@ -25,11 +25,11 @@ void predictIsolate(SendPort sendPort) {
 
       var model = MaskRCNN.fromAddress(message.interpreterAddress);
       sendPort.send('Running model');
-      var r = await model.detect(image);
+      var r = model.detect(image);
 
       if (r['class_ids'].length > 0) {
         sendPort.send('Visualizing result');
-        image = await displayInstances(image, r['rois'], r['masks'],
+        image = displayInstances(image, r['rois'], r['masks'],
             r['class_ids'], CLASS_NAMES[message.model],
             scores: r['scores']);
         sendPort.send(PredictionResult.fromResult(image, r, message.model));

@@ -1,6 +1,5 @@
 import 'dart:io';
 import 'dart:ui';
-import 'package:flutter/services.dart';
 import 'package:flutter_app/annotation/Annotation.dart';
 import 'package:flutter_app/mrcnn/utils.dart' as utils;
 import 'package:flutter_app/utils/prediction_result.dart';
@@ -19,6 +18,7 @@ class ImageExtender {
     if (annotations != null)
       return List.generate(
           annotations!.length, (index) => annotations![index].toMap);
+    return null;
   }
 
   ImageExtender.decodeImage(List<int> data)

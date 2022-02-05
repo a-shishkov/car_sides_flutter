@@ -157,6 +157,7 @@ class _AnnotationPageState extends State<AnnotationPage> {
         }
       }
     }
+    return null;
   }
 
   int? get touchPolygon {
@@ -168,6 +169,7 @@ class _AnnotationPageState extends State<AnnotationPage> {
         }
       }
     }
+    return null;
   }
 
   void onDoubleTapDown(TapDownDetails details) {
@@ -279,11 +281,12 @@ class _AnnotationPageState extends State<AnnotationPage> {
         widget.image.size.width / _imageKey.currentContext!.size!.width;
     var scaleY =
         widget.image.size.height / _imageKey.currentContext!.size!.height;
-    for (var anno in annotations) {
-      anno.scale(scaleX, scaleY);
-    }
-
-    Navigator.pop(context, annotations);
+    Navigator.pop(
+        context,
+        List<Annotation>.generate(
+            annotations.length,
+            (index) => Annotation(annotations[index].categoryId,
+                annotations[index].scalePolygon(scaleX, scaleY))));
   }
 
   void onCancel() {

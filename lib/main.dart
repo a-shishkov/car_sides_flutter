@@ -74,8 +74,12 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       theme: ThemeData(
         brightness: Brightness.light,
+        useMaterial3: true,
       ),
-      darkTheme: ThemeData(brightness: Brightness.dark),
+      darkTheme: ThemeData(
+        brightness: Brightness.dark,
+        useMaterial3: true,
+      ),
       themeMode: ThemeMode.system,
       home: MyHomePage('TF Car Sides'),
     );
@@ -107,6 +111,8 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
 
   bool predictDialogShowing = false;
 
+  bool annotatePageShowing = false;
+
   bool get cameraEnabled => !testImage;
 
   List imageItems = prefs.getStringList('testImagesList') ?? [];
@@ -122,7 +128,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     print('setProgress');
     predictProgress.value = value;
   } */
-  final ValueNotifier<String> predictMessage = ValueNotifier('');
+  final ValueNotifier<String> predictMessage = ValueNotifier('Sending image');
   set setPredictMessage(String message) => predictMessage.value = message;
 
   WhereInference inferenceOn = WhereInference.device;
@@ -212,6 +218,8 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
       return;
     }
 
+    var _inferenceOn = inferenceOn;
+
     if (cameraEnabled) {
       XFile file = await cameraController!.takePicture();
       image = ImageExtender.decodeImageFromPath(file.path);
@@ -223,10 +231,16 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
         ..isAsset = true;
     }
     if (doAnnotate)
+    // TODO: fix onSocket Error
+    {
+      annotatePageShowing = true;
       image!.annotations = await Navigator.push(
         context,
         MaterialPageRoute(builder: (context) => AnnotationPage(image: image!)),
-      );
+      ).whenComplete(() => annotatePageShowing = false);
+      if (_inferenceOn == WhereInference.server && socketConnected == false)
+        return;
+    }
 
     predictDialogShowing = true;
     showDialog(
@@ -234,18 +248,22 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
         context: context,
         builder: (BuildContext context) {
           return ValueListenableBuilder(
-              valueListenable: predictMessage,
-              builder: (BuildContext context, String value, Widget? child) {
-                return AlertDialog(
-                  content: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [CircularProgressIndicator(), Text(value)],
-                  ),
-                );
-              });
-        }).then((value) => predictDialogShowing = value);
+            valueListenable: predictMessage,
+            builder: (BuildContext context, String value, Widget? child) {
+              return AlertDialog(
+                scrollable: true,
+                content: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [child!, Text(value)],
+                ),
+              );
+            },
+            child: CircularProgressIndicator(),
+          );
+        }).whenComplete(() => predictDialogShowing = false);
 
-    switch (inferenceOn) {
+    switch (_inferenceOn) {
       case WhereInference.device:
         var address = interpreters[model]!.address;
 
@@ -264,10 +282,10 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
                 '_device.png';
             await image!.prediction!.image.saveToTempDir(path);
             saveResultExternal(path);
-            if (predictDialogShowing) Navigator.of(context).pop(false);
+            if (predictDialogShowing) Navigator.pop(context);
             jumpToPage(0);
           } else if (message == null) {
-            if (predictDialogShowing) Navigator.of(context).pop(false);
+            if (predictDialogShowing) Navigator.pop(context);
             ScaffoldMessenger.of(context).showSnackBar(SnackBar(
               content: const Text('No instances found'),
             ));
@@ -311,8 +329,8 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
       case 'Results':
         var img;
         if (response.containsKey('masks'))
-          img = await displayInstances(image!, response['rois'],
-              response['masks'], response['class_ids'], CLASS_NAMES[model],
+          img = displayInstances(image!, response['rois'], response['masks'],
+              response['class_ids'], CLASS_NAMES[model],
               scores: response['scores']);
         else {
           var imageDecoded = base64Decode(response['image']);
@@ -324,11 +342,11 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
         saveResultExternal(path);
 
         image!.prediction = PredictionResult.fromResult(img, response, model);
-        if (predictDialogShowing) Navigator.of(context).pop(false);
+        if (predictDialogShowing) Navigator.pop(context);
         jumpToPage(0);
         break;
       case 'No results':
-        if (predictDialogShowing) Navigator.of(context).pop(false);
+        if (predictDialogShowing) Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: const Text('No instances found'),
         ));
@@ -339,10 +357,11 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   void listenSocket() {
     void _resetToDevice() {
       setState(() {
-        image = null;
         inferenceOn = WhereInference.device;
         socketConnected = false;
       });
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Server disconnected')));
     }
 
     print(
@@ -384,13 +403,15 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
       },
       onError: (error) {
         print('onError $error');
-        socket!.destroy();
-        _resetToDevice();
+        // socket!.destroy();
+        // _resetToDevice();
       },
       onDone: () {
         print('Server left. Done');
         socket!.destroy();
         _resetToDevice();
+        if (annotatePageShowing) Navigator.pop(context);
+        if (predictDialogShowing) Navigator.pop(context);
       },
     );
   }
@@ -403,69 +424,71 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
       appBar: AppBar(
         title: Text(widget.title),
       ),
-      body: WillPopScope(
-        onWillPop: () => Future.sync(onWillPop),
-        child: PageView(
-          controller: pageController,
-          physics: NeverScrollableScrollPhysics(),
-          onPageChanged: (int index) {
-            setState(() {
-              selectedPage = index;
-            });
+      body: SafeArea(
+        child: WillPopScope(
+          onWillPop: () => Future.sync(onWillPop),
+          child: PageView(
+            controller: pageController,
+            physics: NeverScrollableScrollPhysics(),
+            onPageChanged: (int index) {
+              setState(() {
+                selectedPage = index;
+              });
 
-            if (index == 1)
-              initCameraController();
-            else {
-              cameraController?.dispose();
-              cameraController = null;
-            }
-          },
-          children: [
-            MrcnnPage(image),
-            CameraPage(
-              cameraController: cameraController,
-              cameraEnabled: cameraEnabled,
-              imageItems: imageItems,
-              initialImage: selectedImage,
-              inferenceOn: inferenceOn,
-              onTakePicture: startPrediction,
-              onChangedDevice: changeDevice,
-              onChangedServer: changeServer,
-              onImageChanged: (int index) {
-                selectedImage = index;
-              },
-            ),
-            SettingsPage(
-              saveExternal: saveExternal,
-              onSaveExternal: (bool value) {
-                setState(() {
-                  saveExternal = value;
-                });
-                prefs.setBool('saveExternal', value);
-              },
-              testImage: testImage,
-              onTestImage: (bool value) {
-                setState(() {
-                  testImage = value;
-                });
-                prefs.setBool('testImage', value);
-              },
-              doAnnotate: doAnnotate,
-              onDoAnnotate: (bool value) {
-                setState(() {
-                  doAnnotate = value;
-                });
-                prefs.setBool('doAnnotate', value);
-              },
-              model: model,
-              onModelType: (ModelType? value) {
-                setState(() {
-                  model = value!;
-                });
-                prefs.setInt('model', value!.index);
-              },
-            ),
-          ],
+              if (index == 1)
+                initCameraController();
+              else {
+                cameraController?.dispose();
+                cameraController = null;
+              }
+            },
+            children: [
+              MrcnnPage(image),
+              CameraPage(
+                cameraController: cameraController,
+                cameraEnabled: cameraEnabled,
+                imageItems: imageItems,
+                initialImage: selectedImage,
+                inferenceOn: inferenceOn,
+                onTakePicture: startPrediction,
+                onChangedDevice: changeDevice,
+                onChangedServer: changeServer,
+                onImageChanged: (int index) {
+                  selectedImage = index;
+                },
+              ),
+              SettingsPage(
+                saveExternal: saveExternal,
+                onSaveExternal: (bool value) {
+                  setState(() {
+                    saveExternal = value;
+                  });
+                  prefs.setBool('saveExternal', value);
+                },
+                testImage: testImage,
+                onTestImage: (bool value) {
+                  setState(() {
+                    testImage = value;
+                  });
+                  prefs.setBool('testImage', value);
+                },
+                doAnnotate: doAnnotate,
+                onDoAnnotate: (bool value) {
+                  setState(() {
+                    doAnnotate = value;
+                  });
+                  prefs.setBool('doAnnotate', value);
+                },
+                model: model,
+                onModelType: (ModelType? value) {
+                  setState(() {
+                    model = value!;
+                  });
+                  prefs.setInt('model', value!.index);
+                },
+              ),
+            ],
+          ),
         ),
       ),
       bottomNavigationBar: BottomNavigationBar(

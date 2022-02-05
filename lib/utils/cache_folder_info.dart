@@ -26,6 +26,7 @@ Future<String?> cacheDirImagesSize() async {
   } catch (e) {
     print(e.toString());
   }
+  return null;
 }
 
 Future<void> deleteAllImages() async {

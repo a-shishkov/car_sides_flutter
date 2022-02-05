@@ -65,6 +65,9 @@ class Polygon {
     points.removeAt(i);
   }
 
+  Offset operator [](int i) => points[i];
+  void operator []=(int i, Offset value) => points[i] = value;
+
   bool isPointInside(Offset p) {
     var n = length;
 
@@ -99,9 +102,6 @@ class Polygon {
 
     return count % 2 == 1;
   }
-
-  operator [](int i) => points[i];
-  operator []=(int i, Offset value) => points[i] = value;
 
   bool _doIntersect(Offset px1, Offset py1, Offset px2, Offset py2) {
     var o1 = _orientation(px1, py1, px2);
@@ -161,11 +161,11 @@ class Annotation {
 
   Annotation(this.categoryId, this.polygon);
 
-  List<double> get segmentation {
-    List<double> segmentation = [];
+  List<int> get segmentation {
+    List<int> segmentation = [];
     for (var point in polygon.points) {
-      segmentation.add(point.dx);
-      segmentation.add(point.dy);
+      segmentation.add(point.dx.round());
+      segmentation.add(point.dy.round());
     }
     return segmentation;
   }
@@ -173,10 +173,9 @@ class Annotation {
   Map<String, dynamic> get toMap =>
       {'category_id': categoryId, 'segmentation': segmentation};
 
-  void scale(double scaleX, double scaleY) {
-    for (var i = 0; i < polygon.length; i++) {
-      polygon[i] = polygon[i].scale(scaleX, scaleY);
-    }
+  Polygon scalePolygon(double scaleX, double scaleY) {
+    return Polygon(List.generate(
+        polygon.length, (index) => polygon[index].scale(scaleX, scaleY)));
   }
 
   @override

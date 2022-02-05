@@ -3,8 +3,8 @@ import 'package:flutter_app/utils/ImageExtender.dart';
 import 'package:tflite_flutter/tflite_flutter.dart';
 import 'package:image/image.dart';
 
-Future<Map> resizeImage(ImageExtender image,
-    {minDim, maxDim, minScale, mode = 'square'}) async {
+Map resizeImage(ImageExtender image,
+    {minDim, maxDim, minScale, mode = 'square'}) {
   int h = image.height;
   int w = image.width;
 
@@ -91,7 +91,7 @@ Future<Map> resizeImage(ImageExtender image,
   };
 }
 
-Future<List> unmoldMask(List mask, bbox, imageShape) async {
+List unmoldMask(List mask, bbox, imageShape) {
   var threshold = 0.5;
   int y1 = bbox[0];
   int x1 = bbox[1];
@@ -147,11 +147,10 @@ List generateAnchors(scales, ratios, shape, featureStride, int anchorStride) {
 
 List generatePyramidAnchors(List scales, List ratios, List featureShapes,
     featureStrides, int anchorStride) {
-  var anchors = [];
-  for (var i = 0; i < scales.length; i++) {
-    anchors.add(generateAnchors(
-        scales[i], ratios, featureShapes[i], featureStrides[i], anchorStride));
-  }
+  var anchors = List.generate(
+      scales.length,
+      (i) => generateAnchors(scales[i], ratios, featureShapes[i],
+          featureStrides[i], anchorStride));
   var pyramidAnchors = [];
   for (var anchor in anchors) {
     pyramidAnchors.addAll(anchor);
@@ -164,15 +163,13 @@ List normBoxes(boxes, shape) {
   var w = shape[1];
   var scale = [h - 1, w - 1, h - 1, w - 1];
   var shift = [0, 0, 1, 1];
-  var output = [];
-  for (var box in boxes) {
-    output
-        .add(List.generate(box.length, (i) => (box[i] - shift[i]) / scale[i]));
-  }
-  return output;
+  return List.generate(
+      boxes.length,
+      (i) => List.generate(
+          boxes[i].length, (j) => (boxes[i][j] - shift[j]) / scale[j]));
 }
 
-List denormBoxes(List boxes, shape) {
+List<List> denormBoxes(List<List> boxes, shape) {
   var h = shape[0];
   var w = shape[1];
   var scale = [h - 1, w - 1, h - 1, w - 1];

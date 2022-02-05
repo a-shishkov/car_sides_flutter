@@ -163,26 +163,6 @@ class _MagnifierState extends State<Magnifier> {
     return _body;
   }
 
-  void _onPanStart(DragStartDetails details) {
-    if (widget.onPanStart != null) widget.onPanStart!(details);
-    setState(() {
-      _cursor = details.globalPosition;
-      _calculateMatrix();
-    });
-  }
-
-  void _onPanUpdate(DragUpdateDetails details) {
-    if (widget.onPanUpdate != null) widget.onPanUpdate!(details);
-    setState(() {
-      _cursor = details.globalPosition;
-      _calculateMatrix();
-    });
-  }
-
-  void _onPanEnd(DragEndDetails details) {
-    if (widget.onPanEnd != null) widget.onPanEnd!(details);
-  }
-
   void _calculateMatrix() {
     RenderBox box = _key.currentContext!.findRenderObject() as RenderBox;
     _childGlobalOffset = box.localToGlobal(Offset.zero);
