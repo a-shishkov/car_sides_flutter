@@ -1,5 +1,7 @@
 import 'dart:convert';
+import 'package:image/image.dart' as ImagePackage;
 import 'dart:io';
+import 'dart:ui' as ui;
 import 'dart:async';
 import 'dart:isolate';
 import 'dart:typed_data';
@@ -10,6 +12,7 @@ import 'package:flutter_app/mrcnn/configs.dart';
 import 'package:flutter_app/mrcnn/visualize.dart';
 import 'package:flutter_app/pages/CameraPage.dart';
 import 'package:flutter_app/pages/MrcnnPage.dart';
+import 'package:flutter_app/pages/RawPage.dart';
 import 'package:flutter_app/pages/SettingsPage.dart';
 import 'package:flutter_app/pages/annotation_page/AnnotationPage.dart';
 import 'package:flutter_app/utils/ImageExtender.dart';
@@ -113,6 +116,8 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
 
   bool annotatePageShowing = false;
 
+  String inferenceType = 'raw';
+
   bool get cameraEnabled => !testImage;
 
   List imageItems = prefs.getStringList('testImagesList') ?? [];
@@ -144,6 +149,9 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   );
 
   ImageExtender? image;
+  List? boxes;
+  List? mrcnnMasks;
+  ui.Image? imgg;
 
   @override
   void initState() {
@@ -310,6 +318,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
         var imageEncoded = base64.encode(image!.encodeJpg);
         _sendMessage(Uint8List.fromList(jsonEncode({
           'model': EnumToString.convertToString(model),
+          'type': inferenceType,
           'image': imageEncoded,
           'annotations': image!.mapAnnotations
         }).codeUnits));
@@ -326,7 +335,35 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
         print(response['message']);
         setPredictMessage = response['message'];
         break;
-      case 'Results':
+      case 'Results raw':
+        boxes = response['boxes'];
+        mrcnnMasks = response['mrcnn_masks'];
+
+        List mask = mrcnnMasks![0];
+        var pixelMask = List.generate(
+            mask.shape[0],
+            (i) => List.generate(
+                mask.shape[1],
+                (j) => List.generate(4, (k) {
+                      if (k == 0) return 255;
+                      if (k == 1) return 0;
+                      if (k == 2) return 0;
+                      if (k == 3) return (mask[i][j] * 255).toInt();
+                    })));
+
+        var maskImage = ImageExtender.fromBytes(
+            mask.shape[0], mask.shape[1], pixelMask.flatten(),
+            format: ImagePackage.Format.rgba);
+
+        maskImage.resize(50, 21);
+        print(maskImage.image.getBytes(format: ImagePackage.Format.rgba));
+        imgg = await decodeImageFromList(
+            Uint8List.fromList(ImagePackage.encodePng(maskImage.image)));
+
+        if (predictDialogShowing) Navigator.pop(context);
+        jumpToPage(0);
+        break;
+      case 'Results image':
         var img;
         if (response.containsKey('masks'))
           img = displayInstances(image!, response['rois'], response['masks'],
@@ -418,6 +455,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
+    inferenceType = 'raw';
     return Scaffold(
       resizeToAvoidBottomInset: false,
       backgroundColor: selectedPage == 1 ? Colors.black : null,
@@ -443,7 +481,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
               }
             },
             children: [
-              MrcnnPage(image),
+            inferenceType == 'raw'? RawPage(image, imgg, boxes, mrcnnMasks): MrcnnPage(image),
               CameraPage(
                 cameraController: cameraController,
                 cameraEnabled: cameraEnabled,

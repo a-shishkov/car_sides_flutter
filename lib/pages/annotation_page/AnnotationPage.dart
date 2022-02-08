@@ -98,15 +98,9 @@ class _AnnotationPageState extends State<AnnotationPage> {
               onLongPressMoveUpdate: onLongPressMoveUpdate,
               onLongPressUp: onLongPressUp,
               child: CustomPaint(
-                foregroundPainter: PolygonPainter(annotations,
-                    _currentAnnotationIndex, _selectedPoint, pointRadius),
-                child: widget.image.isAsset
-                    ? Image.asset(widget.image.path!, key: _imageKey)
-                    : Image.file(
-                        File(widget.image.path!),
-                        key: _imageKey,
-                      ),
-              ),
+                  foregroundPainter: PolygonPainter(annotations,
+                      _currentAnnotationIndex, _selectedPoint, pointRadius),
+                  child: widget.image.imageWidget(key: _imageKey)),
             ),
           ),
         ),

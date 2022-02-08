@@ -1,5 +1,7 @@
 import 'dart:io';
-import 'dart:ui';
+import 'dart:typed_data';
+import 'dart:ui' as ui;
+import 'package:flutter/widgets.dart';
 import 'package:flutter_app/annotation/Annotation.dart';
 import 'package:flutter_app/mrcnn/utils.dart' as utils;
 import 'package:flutter_app/utils/prediction_result.dart';
@@ -39,7 +41,7 @@ class ImageExtender {
       : image = imageExtender.image,
         path = imageExtender.path;
 
-  List<int> get getBytes => image.getBytes(format: ImagePackage.Format.rgb);
+  Uint8List get getBytes => image.getBytes(format: ImagePackage.Format.rgb);
   List get imageList {
     return image
         .getBytes(format: ImagePackage.Format.rgb)
@@ -55,6 +57,18 @@ class ImageExtender {
   get encodeJpg {
     return ImagePackage.encodeJpg(image);
   }
+
+  Widget? imageWidget({Key? key}) => path != null
+      ? isAsset
+          ? Image.asset(
+              path!,
+              key: key,
+            )
+          : Image.file(
+              File(path!),
+              key: key,
+            )
+      : null;
 
   setImage(image) async {
     this.image = image;
