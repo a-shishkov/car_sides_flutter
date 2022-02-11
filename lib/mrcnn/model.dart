@@ -25,14 +25,15 @@ class MaskRCNN {
   MaskRCNN.fromAddress(int address)
       : interpreter = Interpreter.fromAddress(address);
 
-  Map<String, List> moldInputs(ImageExtender image) {
-    var resize = resizeImage(ImageExtender.from(image),
+  Map<String, List> moldInputs(PredictionImage image) {
+    var resize = resizeImage(PredictionImage.from(image),
         minDim: CarPartsConfig.IMAGE_MIN_DIM,
         maxDim: CarPartsConfig.IMAGE_MAX_DIM,
         minScale: CarPartsConfig.IMAGE_MIN_SCALE,
         mode: CarPartsConfig.IMAGE_RESIZE_MODE);
 
-    List moldedImage = moldImage((resize['image'] as ImageExtender).imageList);
+    List moldedImage =
+        moldImage((resize['image'] as PredictionImage).imageList);
 
     var imageMeta = composeImageMeta(0, [image.height, image.width, 3],
         moldedImage.shape, resize['window'], resize['scale']);
@@ -44,8 +45,8 @@ class MaskRCNN {
     };
   }
 
-  List unmoldDetections(
-      detections, List mrcnnMask, originalImageShape, imageShape, window) {
+  Future unmoldDetections(detections, List mrcnnMask, originalImageShape,
+      imageShape, window) async {
     var N = detections.length;
     for (var i = 0; i < detections.length; i++) {
       if (detections[i][4] == 0) {
@@ -55,15 +56,6 @@ class MaskRCNN {
     }
 
     if (N == 0) return List.filled(4, List.empty());
-
-    var classIDs = List.generate(N, (i) => detections[i][4].toInt());
-    var scores = List.generate(N, (i) => detections[i][5]);
-    var masks = List.generate(
-        N,
-        (i) => List.generate(
-            mrcnnMask[i].length,
-            (j) => List.generate(mrcnnMask[i][j].length,
-                (k) => mrcnnMask[i][j][k][classIDs[i]])));
 
     window = normBoxes([window], imageShape)[0];
     var wy1 = window[0];
@@ -99,21 +91,39 @@ class MaskRCNN {
     boxes = noDuplicateBoxes;
     N = boxes.length;
 
-    List fullMasks = List.generate(
-        N, (i) => unmoldMask(masks[i], boxes[i], originalImageShape));
+    var classIDs = List.generate(N, (i) => detections[i][4].toInt());
+    var scores = List.generate(N, (i) => detections[i][5]);
+    var masks = List.generate(
+        N,
+        (i) => List.generate(
+            mrcnnMask[i].length,
+            (j) => List.generate(mrcnnMask[i][j].length,
+                (k) => mrcnnMask[i][j][k][classIDs[i]])));
+
+/*     List maskImages = [];
+    print(N);
+    print(masks.shape);
+    print(boxes.shape);
+    for (var i = 0; i < N; i++) {
+      print('before maskImages');
+      maskImages.add(await unmoldBboxMask(masks[i], boxes[i]));
+      print('afte  maskImages');
+    } */
+/*     List fullMasks = List.generate(
+        N, (i) => unmoldFullMask(masks[i], boxes[i], originalImageShape));
 
     List stackedFullMask = List.generate(
         originalImageShape[0],
         (i) => List.generate(
             originalImageShape[1],
             (j) =>
-                List.generate(fullMasks.shape[0], (k) => fullMasks[k][i][j])));
+                List.generate(fullMasks.shape[0], (k) => fullMasks[k][i][j]))); */
 
-    return [boxes, classIDs, scores, stackedFullMask];
+    return [boxes, classIDs, scores, masks];
   }
 
-  detect(ImageExtender image) {
-    var mold = moldInputs(ImageExtender.from(image));
+  detect(PredictionImage image) async {
+    var mold = moldInputs(PredictionImage.from(image));
 
     var anchors = [getAnchors(mold['molded_images']!.shape.sublist(1))];
 
@@ -128,15 +138,14 @@ class MaskRCNN {
     List detectionsList = detections.getDoubleList().reshape(outputShapes[3]);
     List mrcnnMaskList = mrcnnMask.getDoubleList().reshape(outputShapes[4]);
 
-    var unmold = unmoldDetections(
+    var unmold = await unmoldDetections(
         detectionsList[0],
         mrcnnMaskList[0],
         image.imageList.shape,
         mold['molded_images']!.shape.sublist(1),
         mold['windows']![0]);
-
     var result = {
-      'rois': unmold[0],
+      'boxes': unmold[0],
       'class_ids': unmold[1],
       'scores': unmold[2],
       'masks': unmold[3]

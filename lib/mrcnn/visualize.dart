@@ -13,7 +13,7 @@ randomColors(N, [bright = true]) {
   return rgb;
 }
 
-ImageExtender applyMask(ImageExtender maskedImage, List mask, Color color,
+PredictionImage applyMask(PredictionImage maskedImage, List mask, Color color,
     {alpha = 0.5}) {
   var maskImageList = List.generate(
       mask.shape[0],
@@ -28,7 +28,7 @@ ImageExtender applyMask(ImageExtender maskedImage, List mask, Color color,
   return maskedImage;
 }
 
-ImageExtender displayInstances(ImageExtender originalImage, List boxes,
+PredictionImage displayInstances(PredictionImage originalImage, List boxes,
     List masks, List classIds, classNames,
     {scores, title, showMask = true, showBbox = true, colors, captions}) {
 /*  if (boxes.isEmpty) {

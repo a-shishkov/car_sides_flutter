@@ -31,7 +31,6 @@ class SettingsPage extends StatefulWidget {
 }
 
 class _SettingsPageState extends State<SettingsPage> {
-
   String cacheDirInfo = 'Calculating...';
   bool deleteEnabled = false;
 
@@ -52,7 +51,7 @@ class _SettingsPageState extends State<SettingsPage> {
             SwitchListTile(
               title: Text('Save photos to download dir'),
               value: widget.saveExternal,
-              onChanged: widget.onSaveExternal,
+              onChanged: true ? null : widget.onSaveExternal,
               tileColor: Theme.of(context).colorScheme.surface,
             ),
             SwitchListTile(

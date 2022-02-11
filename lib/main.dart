@@ -1,5 +1,6 @@
 import 'dart:convert';
-import 'package:image/image.dart' as ImagePackage;
+import 'package:flutter_app/mrcnn/utils.dart';
+import 'package:image/image.dart' as image_package;
 import 'dart:io';
 import 'dart:ui' as ui;
 import 'dart:async';
@@ -110,6 +111,8 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
 
   bool testImage = prefs.getBool('testImage') ?? false;
 
+  bool get cameraEnabled => !testImage;
+
   bool doAnnotate = prefs.getBool('doAnnotate') ?? true;
 
   bool predictDialogShowing = false;
@@ -117,8 +120,6 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   bool annotatePageShowing = false;
 
   String inferenceType = 'raw';
-
-  bool get cameraEnabled => !testImage;
 
   List imageItems = prefs.getStringList('testImagesList') ?? [];
 
@@ -128,12 +129,8 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
 
   bool socketConnected = false;
 
-  /* ValueNotifier<double> predictProgress = ValueNotifier(0.0);
-  set setProgress(double value) {
-    print('setProgress');
-    predictProgress.value = value;
-  } */
   final ValueNotifier<String> predictMessage = ValueNotifier('Sending image');
+
   set setPredictMessage(String message) => predictMessage.value = message;
 
   WhereInference inferenceOn = WhereInference.device;
@@ -148,10 +145,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     keepPage: true,
   );
 
-  ImageExtender? image;
-  List? boxes;
-  List? mrcnnMasks;
-  ui.Image? imgg;
+  PredictionImage? image;
 
   @override
   void initState() {
@@ -210,14 +204,14 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     if (mounted) setState(() {});
   }
 
-  Future saveResultExternal(String path) async {
+/*   Future saveResultExternal(String path) async {
     if (!saveExternal) return;
     var imagePath = await image?.prediction?.image.saveToDownloadDir(path);
     if (imagePath != null)
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text('Image saved to $imagePath'),
       ));
-  }
+  } */
 
   startPrediction() async {
     if (inferenceOn == WhereInference.device && !isPhysical) {
@@ -230,11 +224,11 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
 
     if (cameraEnabled) {
       XFile file = await cameraController!.takePicture();
-      image = ImageExtender.decodeImageFromPath(file.path);
+      image = PredictionImage.decodeImageFromPath(file.path);
     } else {
       var path = 'assets/images/${imageItems[selectedImage]}';
       final byteData = await rootBundle.load(path);
-      image = ImageExtender.decodeImage(Uint8List.view(byteData.buffer))
+      image = PredictionImage.decodeImage(Uint8List.view(byteData.buffer))
         ..path = path
         ..isAsset = true;
     }
@@ -278,28 +272,11 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
         ReceivePort receivePort = ReceivePort();
         Completer sendPortCompleter = new Completer<SendPort>();
 
-        receivePort.listen((message) async {
-          print('<root> $message received');
+        receivePort.listen((message) {
           if (message is SendPort)
             sendPortCompleter.complete(message);
-          else if (message is String)
-            setPredictMessage = message;
-          else if (message is PredictionResult) {
-            image!.prediction = message;
-            var path = DateFormat('yyyyMMdd_HH_mm_ss').format(DateTime.now()) +
-                '_device.png';
-            await image!.prediction!.image.saveToTempDir(path);
-            saveResultExternal(path);
-            if (predictDialogShowing) Navigator.pop(context);
-            jumpToPage(0);
-          } else if (message == null) {
-            if (predictDialogShowing) Navigator.pop(context);
-            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-              content: const Text('No instances found'),
-            ));
-          }
+          else if (message is Map) handleResponse(message);
         });
-
         await Isolate.spawn(predictIsolate, receivePort.sendPort);
 
         SendPort sendPort = await sendPortCompleter.future;
@@ -308,7 +285,6 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
 
       case WhereInference.server:
         void _sendMessage(Uint8List message) {
-          print('messageLength ${message.length}');
           var msgSize = ByteData(4);
           msgSize.setInt32(0, message.length);
           socket!.add(msgSize.buffer.asUint8List());
@@ -326,9 +302,8 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     }
   }
 
-  processResponse(List<int> message) async {
-    Map response = jsonDecode(String.fromCharCodes(message));
-    print('Server: ${response['response']}');
+  handleResponse(Map response) async {
+    print('Response: ${response['response']}');
 
     switch (response['response']) {
       case 'Message':
@@ -336,30 +311,26 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
         setPredictMessage = response['message'];
         break;
       case 'Results raw':
-        boxes = response['boxes'];
-        mrcnnMasks = response['mrcnn_masks'];
+        List boxes = response['boxes']!;
+        List<ui.Image> masks = [];
+        for (var i = 0; i < boxes.length; i++) {
+          List mask = response['masks']![i];
+          List bbox = boxes[i];
 
-        List mask = mrcnnMasks![0];
-        var pixelMask = List.generate(
-            mask.shape[0],
-            (i) => List.generate(
-                mask.shape[1],
-                (j) => List.generate(4, (k) {
-                      if (k == 0) return 255;
-                      if (k == 1) return 0;
-                      if (k == 2) return 0;
-                      if (k == 3) return (mask[i][j] * 255).toInt();
-                    })));
+          var hsv = HSVColor.fromAHSV(1.0, i / boxes.length * 360.0, 1.0, 1);
+          var rgb = hsv.toColor();
 
-        var maskImage = ImageExtender.fromBytes(
-            mask.shape[0], mask.shape[1], pixelMask.flatten(),
-            format: ImagePackage.Format.rgba);
+          masks.add(await unmoldBboxMask(mask, bbox, color: rgb));
+        }
 
-        maskImage.resize(50, 21);
-        print(maskImage.image.getBytes(format: ImagePackage.Format.rgba));
-        imgg = await decodeImageFromList(
-            Uint8List.fromList(ImagePackage.encodePng(maskImage.image)));
+        image!.prediction = PredictionResult(
+            boxes: boxes,
+            masks: masks,
+            classIDs: response['class_ids'],
+            scores: response['scores'],
+            model: model);
 
+        // TODO: isnt better to use named pop?
         if (predictDialogShowing) Navigator.pop(context);
         jumpToPage(0);
         break;
@@ -371,14 +342,14 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
               scores: response['scores']);
         else {
           var imageDecoded = base64Decode(response['image']);
-          img = ImageExtender.decodeImage(imageDecoded);
+          img = PredictionImage.decodeImage(imageDecoded);
         }
         var path = DateFormat('yyyyMMdd_HH_mm_ss').format(DateTime.now()) +
             '_server.png';
         await img.saveToTempDir(path);
-        saveResultExternal(path);
+        // saveResultExternal(path);
 
-        image!.prediction = PredictionResult.fromResult(img, response, model);
+        image!.prediction = PredictionResult.fromResult(response, model);
         if (predictDialogShowing) Navigator.pop(context);
         jumpToPage(0);
         break;
@@ -428,7 +399,8 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
           } else {
             msg.addAll(data.sublist(0, msgLen - readLen));
 
-            processResponse(msg);
+            Map response = jsonDecode(String.fromCharCodes(msg));
+            handleResponse(response);
 
             firstMessage = true;
             if (data.length + readLen == msgLen) {
@@ -458,7 +430,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     inferenceType = 'raw';
     return Scaffold(
       resizeToAvoidBottomInset: false,
-      backgroundColor: selectedPage == 1 ? Colors.black : null,
+      backgroundColor: selectedPage != 2 ? Colors.black : null,
       appBar: AppBar(
         title: Text(widget.title),
       ),
@@ -481,7 +453,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
               }
             },
             children: [
-            inferenceType == 'raw'? RawPage(image, imgg, boxes, mrcnnMasks): MrcnnPage(image),
+              inferenceType == 'raw' ? RawPage(image) : MrcnnPage(image),
               CameraPage(
                 cameraController: cameraController,
                 cameraEnabled: cameraEnabled,

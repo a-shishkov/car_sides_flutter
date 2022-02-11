@@ -5,12 +5,12 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_app/annotation/Annotation.dart';
 import 'package:flutter_app/mrcnn/utils.dart' as utils;
 import 'package:flutter_app/utils/prediction_result.dart';
-import 'package:image/image.dart' as ImagePackage;
+import 'package:image/image.dart' as image_package;
 import 'package:tflite_flutter/tflite_flutter.dart';
 import 'package:path_provider/path_provider.dart';
 
-class ImageExtender {
-  ImagePackage.Image image;
+class PredictionImage {
+  image_package.Image image;
   bool isAsset = false;
   String? path;
   List<Annotation>? annotations;
@@ -23,28 +23,31 @@ class ImageExtender {
     return null;
   }
 
-  ImageExtender.decodeImage(List<int> data)
-      : image = ImagePackage.decodeImage(data)!;
+  PredictionImage.decodeImage(List<int> data)
+      : image = image_package.decodeImage(data)!;
 
-  ImageExtender.decodeImageFromPath(String path)
-      : image = ImagePackage.decodeImage(File(path).readAsBytesSync())!,
+  PredictionImage.decodeImageFromPath(String path)
+      : image = image_package.decodeImage(File(path).readAsBytesSync())!,
         path = path;
 
-  ImageExtender.fromImage(ImagePackage.Image image) : image = image;
+  PredictionImage.fromImage(image_package.Image image) : image = image;
 
-  ImageExtender.fromBytes(int width, int height, List<int> bytes,
-      {ImagePackage.Format format = ImagePackage.Format.rgb})
+  PredictionImage.fromBytes(int width, int height, List<int> bytes,
+      {image_package.Format format = image_package.Format.rgb})
       : image =
-            ImagePackage.Image.fromBytes(width, height, bytes, format: format);
+            image_package.Image.fromBytes(width, height, bytes, format: format);
 
-  ImageExtender.from(ImageExtender imageExtender)
+  PredictionImage.from(PredictionImage imageExtender)
       : image = imageExtender.image,
         path = imageExtender.path;
 
-  Uint8List get getBytes => image.getBytes(format: ImagePackage.Format.rgb);
+  Uint8List getBytes({format = image_package.Format.rgb}) {
+    return image.getBytes(format: format);
+  }
+
   List get imageList {
     return image
-        .getBytes(format: ImagePackage.Format.rgb)
+        .getBytes(format: image_package.Format.rgb)
         .reshape([image.height, image.width, 3]);
   }
 
@@ -54,9 +57,9 @@ class ImageExtender {
 
   int get width => image.width;
 
-  get encodeJpg {
-    return ImagePackage.encodeJpg(image);
-  }
+  List<int> get encodeJpg => image_package.encodeJpg(image);
+
+  List<int> get encodePng => image_package.encodePng(image);
 
   Widget? imageWidget({Key? key}) => path != null
       ? isAsset
@@ -76,29 +79,29 @@ class ImageExtender {
   }
 
   resize(width, height) {
-    image = ImagePackage.copyResize(image,
+    image = image_package.copyResize(image,
         width: width,
         height: height,
-        interpolation: ImagePackage.Interpolation.cubic);
+        interpolation: image_package.Interpolation.cubic);
   }
 
   rotate(num angle) async {
-    image = ImagePackage.copyRotate(image, angle);
+    image = image_package.copyRotate(image, angle);
     if (path != null) {
       await save(path);
     }
   }
 
   drawRect(int x1, int y1, int x2, int y2, int color) {
-    image = ImagePackage.drawRect(image, x1, y1, x2, y2, color);
+    image = image_package.drawRect(image, x1, y1, x2, y2, color);
   }
 
-  drawString(ImagePackage.BitmapFont font, x, y, String string) {
-    image = ImagePackage.drawString(image, font, x, y, string);
+  drawString(image_package.BitmapFont font, x, y, String string) {
+    image = image_package.drawString(image, font, x, y, string);
   }
 
-  drawImage(ImagePackage.Image src) {
-    image = ImagePackage.drawImage(image, src);
+  drawImage(image_package.Image src) {
+    image = image_package.drawImage(image, src);
   }
 
   save(path, [refreshPath = true]) async {

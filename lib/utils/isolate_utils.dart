@@ -7,7 +7,7 @@ import 'package:flutter_app/utils/ImageExtender.dart';
 import 'package:flutter_app/utils/prediction_result.dart';
 
 class IsolateMsg {
-  ImageExtender image;
+  PredictionImage image;
   int interpreterAddress;
   ModelType model;
 
@@ -21,20 +21,17 @@ void predictIsolate(SendPort sendPort) {
   receivePort.listen((message) async {
     print('<isolate> $message received');
     if (message is IsolateMsg) {
-      ImageExtender image = message.image;
+      PredictionImage image = message.image;
 
       var model = MaskRCNN.fromAddress(message.interpreterAddress);
-      sendPort.send('Running model');
-      var r = model.detect(image);
+      sendPort.send({'response': 'Message', 'message': 'Running model'});
+      var r = await model.detect(image);
 
       if (r['class_ids'].length > 0) {
-        sendPort.send('Visualizing result');
-        image = displayInstances(image, r['rois'], r['masks'],
-            r['class_ids'], CLASS_NAMES[message.model],
-            scores: r['scores']);
-        sendPort.send(PredictionResult.fromResult(image, r, message.model));
+        r['response'] = 'Results raw';
+        sendPort.send(r);
       } else {
-        sendPort.send(null);
+        sendPort.send({'response': 'No results'});
       }
     }
   });

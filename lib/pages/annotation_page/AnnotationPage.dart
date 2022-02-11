@@ -13,7 +13,7 @@ import 'Magnifier.dart';
 class AnnotationPage extends StatefulWidget {
   const AnnotationPage({Key? key, required this.image}) : super(key: key);
 
-  final ImageExtender image;
+  final PredictionImage image;
 
   @override
   _AnnotationPageState createState() => _AnnotationPageState();

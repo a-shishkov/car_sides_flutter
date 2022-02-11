@@ -37,6 +37,12 @@ class _CameraPageState extends State<CameraPage> {
 
   late int selectedImage;
 
+  ButtonStyle get enabledStyle => TextButton.styleFrom(
+      primary: Colors.black, backgroundColor: Colors.white);
+
+  ButtonStyle get disabledStyle => TextButton.styleFrom(
+      primary: Colors.grey[900], backgroundColor: Colors.grey);
+
   @override
   void initState() {
     selectedImage = widget.initialImage ?? 0;
@@ -61,33 +67,31 @@ class _CameraPageState extends State<CameraPage> {
                 : Center(
                     child: CircularProgressIndicator(),
                   )
-            : Builder(
-                builder: (BuildContext context) =>
-                    Stack(alignment: Alignment.center, children: [
-                      PhotoViewGallery.builder(
-                          pageController: pageController,
-                          onPageChanged: imagePageChanged,
-                          itemCount: widget.imageItems.length,
-                          builder: (BuildContext context, int index) {
-                            return PhotoViewGalleryPageOptions(
-                                maxScale: PhotoViewComputedScale.contained,
-                                minScale: PhotoViewComputedScale.contained,
-                                imageProvider: AssetImage(
-                                    'assets/images/${widget.imageItems[index]}'));
-                          }),
-                      Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Icon(
-                              Icons.arrow_back_ios_rounded,
-                              color: Colors.white,
-                            ),
-                            Icon(
-                              Icons.arrow_forward_ios_rounded,
-                              color: Colors.white,
-                            )
-                          ])
-                    ])),
+            : Stack(alignment: Alignment.center, children: [
+                PhotoViewGallery.builder(
+                    pageController: pageController,
+                    onPageChanged: imagePageChanged,
+                    itemCount: widget.imageItems.length,
+                    builder: (BuildContext context, int index) {
+                      return PhotoViewGalleryPageOptions(
+                          maxScale: PhotoViewComputedScale.contained,
+                          minScale: PhotoViewComputedScale.contained,
+                          imageProvider: AssetImage(
+                              'assets/images/${widget.imageItems[index]}'));
+                    }),
+                Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Icon(
+                        Icons.arrow_back_ios_rounded,
+                        color: Colors.white,
+                      ),
+                      Icon(
+                        Icons.arrow_forward_ios_rounded,
+                        color: Colors.white,
+                      )
+                    ])
+              ]),
         Container(
           color: Colors.black45,
           child: Row(
@@ -99,12 +103,8 @@ class _CameraPageState extends State<CameraPage> {
                   child: TextButton(
                     onPressed: widget.onChangedDevice,
                     style: widget.inferenceOn == WhereInference.device
-                        ? TextButton.styleFrom(
-                            primary: Colors.black,
-                            backgroundColor: Colors.white)
-                        : TextButton.styleFrom(
-                            primary: Colors.grey[900],
-                            backgroundColor: Colors.grey),
+                        ? enabledStyle
+                        : disabledStyle,
                     child: Text('Device'),
                   ),
                 ),
@@ -126,12 +126,8 @@ class _CameraPageState extends State<CameraPage> {
                   child: TextButton(
                       onPressed: widget.onChangedServer,
                       style: widget.inferenceOn == WhereInference.server
-                          ? TextButton.styleFrom(
-                              primary: Colors.black,
-                              backgroundColor: Colors.white)
-                          : TextButton.styleFrom(
-                              primary: Colors.grey[900],
-                              backgroundColor: Colors.grey),
+                          ? enabledStyle
+                          : disabledStyle,
                       child: Text('Server')),
                 ),
               ),

@@ -1,26 +1,23 @@
 import 'package:flutter_app/main.dart';
-
-import 'ImageExtender.dart';
+import 'dart:ui' as ui;
 
 class PredictionResult {
-  ImageExtender image;
   List boxes;
-  List? masks;
-  List classIds;
+  List<ui.Image> masks;
+  List classIDs;
   List scores;
   ModelType model;
 
   PredictionResult(
-      {required this.image,
-      required this.boxes,
-      this.masks,
-      required this.classIds,
+      {required this.boxes,
+      required this.masks,
+      required this.classIDs,
       required this.scores,
       required this.model});
 
-  PredictionResult.fromResult(this.image, Map result, this.model)
-      : this.boxes = result['rois'],
-        this.classIds = result['class_ids'],
+  PredictionResult.fromResult(Map result, this.model)
+      : this.boxes = result['boxes'],
+        this.classIDs = result['class_ids'],
         this.scores = result['scores'],
         this.masks = result['masks'];
 }

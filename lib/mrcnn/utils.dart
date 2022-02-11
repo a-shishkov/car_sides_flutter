@@ -1,9 +1,15 @@
+import 'dart:async';
 import 'dart:math';
+import 'dart:typed_data';
+import 'dart:ui' as ui;
+import 'package:flutter/animation.dart';
+import 'package:flutter/painting.dart';
 import 'package:flutter_app/utils/ImageExtender.dart';
 import 'package:tflite_flutter/tflite_flutter.dart';
 import 'package:image/image.dart';
+import 'package:image/image.dart' as image_package;
 
-Map resizeImage(ImageExtender image,
+Map resizeImage(PredictionImage image,
     {minDim, maxDim, minScale, mode = 'square'}) {
   int h = image.height;
   int w = image.width;
@@ -91,30 +97,65 @@ Map resizeImage(ImageExtender image,
   };
 }
 
-List unmoldMask(List mask, bbox, imageShape) {
-  var threshold = 0.5;
+List unmoldMask(List mask, bbox) {
   int y1 = bbox[0];
   int x1 = bbox[1];
   int y2 = bbox[2];
   int x2 = bbox[3];
 
-  var pixelMask = List.generate(
+  // TODO: probably bug with width and height
+  var maskGrayscale = PredictionImage.fromBytes(
+      mask.shape[1],
       mask.shape[0],
-      (i) => List.generate(mask.shape[1],
-          (j) => List.generate(3, (_) => (mask[i][j] * 255).toInt())));
+      List.generate(
+          mask.shape[0],
+          (i) => List.generate(
+              mask.shape[1], (j) => (mask[i][j] * 255).toInt())).flatten(),
+      format: image_package.Format.luminance);
 
-  var maskImage = ImageExtender.fromBytes(
-      mask.shape[0], mask.shape[1], pixelMask.flatten());
+  maskGrayscale.resize((x2 - x1), (y2 - y1));
+  var maskBytes = maskGrayscale
+      .getBytes(format: image_package.Format.luminance)
+      .reshape([maskGrayscale.height, maskGrayscale.width]);
+  return maskBytes;
+}
 
-  var resizeScale = 1;
-  maskImage.resize((x2 - x1) * resizeScale, (y2 - y1) * resizeScale);
-  var maskBytes = maskImage.imageList;
+Future<ui.Image> unmoldBboxMask(List mask, List bbox,
+    {threshold = 0.5,
+    color = const ui.Color.fromARGB(255, 255, 255, 255)}) async {
+  List maskBytes = unmoldMask(mask, bbox);
+  var maskImage = image_package.Image.fromBytes(
+      maskBytes.shape[1],
+      maskBytes.shape[0],
+      List.generate(
+          maskBytes.shape[0],
+          (i) => List.generate(
+              maskBytes.shape[1],
+              (j) => [
+                    color.red,
+                    color.green,
+                    color.blue,
+                    maskBytes[i][j] > 255 * threshold ? (255 * 0.8).toInt() : 0
+                  ])).flatten());
+  var uiImage = Completer<ui.Image>();
+  ui.decodeImageFromList(Uint8List.fromList(image_package.encodePng(maskImage)),
+      (result) => uiImage.complete(result));
+  return uiImage.future;
+}
+
+List unmoldFullMask(List mask, bbox, imageShape, {threshold = 0.5}) {
+  int y1 = bbox[0];
+  int x1 = bbox[1];
+  int y2 = bbox[2];
+  int x2 = bbox[3];
+
+  List maskBytes = unmoldMask(mask, bbox);
   var fullMask = List.generate(
       imageShape[0],
       (i) => List.generate(
           imageShape[1],
           (j) => (i >= y1 && i < y2 && j >= x1 && j < x2)
-              ? (maskBytes[i - y1][j - x1] as List).first >= threshold * 255
+              ? maskBytes[i - y1][j - x1] >= threshold * 255
               : false));
 
   return fullMask;

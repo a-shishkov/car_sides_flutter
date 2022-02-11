@@ -1,22 +1,30 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_app/utils/ImageExtender.dart';
+import 'package:flutter_app/utils/prediction_result.dart';
 import 'package:photo_view/photo_view.dart';
+import '../main.dart';
 import '../mrcnn/configs.dart';
 
 class MrcnnPage extends StatelessWidget {
-  final ImageExtender? image;
-  // final PredictionResult? predictionResult;
-  // final ModelType model;
   const MrcnnPage(this.image, {Key? key}) : super(key: key);
 
+  final PredictionImage? image;
+
+  String get path => image!.path!;
+
+  bool get isAsset => image!.isAsset;
+
+  PredictionResult? get prediction => image?.prediction;
+
+  ModelType get model => prediction!.model;
+
+  List get classIds => prediction!.classIDs;
   @override
   Widget build(BuildContext context) {
-    if (image != null && image!.prediction != null) {
-      var path = image!.prediction!.image.path!;
-      var isAsset = image!.isAsset;
+    if (image != null && prediction != null) {
       var model = image!.prediction!.model;
-      var classIds = image!.prediction!.classIds;
+      var classIds = image!.prediction!.classIDs;
       var boxes = image!.prediction!.boxes;
       var scores = image!.prediction!.scores;
 
