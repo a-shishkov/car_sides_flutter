@@ -1,5 +1,5 @@
 import 'package:flutter_app/mrcnn/utils.dart';
-import 'package:flutter_app/utils/ImageExtender.dart';
+import 'package:flutter_app/utils/PredictionImage.dart';
 import 'package:tflite_flutter/tflite_flutter.dart';
 import 'package:tflite_flutter_helper/tflite_flutter_helper.dart';
 import 'configs.dart';
@@ -45,8 +45,8 @@ class MaskRCNN {
     };
   }
 
-  Future unmoldDetections(detections, List mrcnnMask, originalImageShape,
-      imageShape, window) async {
+  List unmoldDetections(
+      detections, List mrcnnMask, originalImageShape, imageShape, window) {
     var N = detections.length;
     for (var i = 0; i < detections.length; i++) {
       if (detections[i][4] == 0) {
@@ -122,7 +122,7 @@ class MaskRCNN {
     return [boxes, classIDs, scores, masks];
   }
 
-  detect(PredictionImage image) async {
+  detect(PredictionImage image) {
     var mold = moldInputs(PredictionImage.from(image));
 
     var anchors = [getAnchors(mold['molded_images']!.shape.sublist(1))];
@@ -138,7 +138,7 @@ class MaskRCNN {
     List detectionsList = detections.getDoubleList().reshape(outputShapes[3]);
     List mrcnnMaskList = mrcnnMask.getDoubleList().reshape(outputShapes[4]);
 
-    var unmold = await unmoldDetections(
+    var unmold = unmoldDetections(
         detectionsList[0],
         mrcnnMaskList[0],
         image.imageList.shape,

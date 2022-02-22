@@ -1,39 +1,36 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_app/utils/ImageExtender.dart';
-import 'package:flutter_app/utils/prediction_result.dart';
-import '../mrcnn/configs.dart';
+import 'package:flutter_app/utils/PredictionImage.dart';
+import '../main.dart';
 import 'dart:ui' as ui;
+import 'package:touchable/touchable.dart';
 
 class PredictionPainter extends CustomPainter {
-  PredictionPainter(PredictionResult prediction)
-      : this.boxes = prediction.boxes,
-        this.masks = prediction.masks,
-        this.scores = prediction.scores,
-        this.classIDs = prediction.classIDs,
-        this.classNames = CLASS_NAMES[prediction.model]!;
+  PredictionPainter(
+      this.context, this.predictions, this.showParts, this.showDamages);
 
-  // final List<Rect> rects;
-  final List boxes;
-  final List<ui.Image> masks;
-  final List scores;
-  final List classIDs;
-  final List classNames;
+  final BuildContext context;
+  final Map<ModelType, PredictionResult> predictions;
+  final bool showParts;
+  final bool showDamages;
 
-  List<Rect> get rects => List.generate(
-      boxes.length,
-      (i) => Rect.fromLTRB((boxes[i][1]).toDouble(), (boxes[i][0]).toDouble(),
-          (boxes[i][3]).toDouble(), (boxes[i][2]).toDouble()));
+  List<Rect> getRects(ModelType model) {
+    var boxes = predictions[model]!.boxes;
+    return List.generate(
+        boxes.length,
+        (i) => Rect.fromLTRB(boxes[i][1].toDouble(), boxes[i][0].toDouble(),
+            boxes[i][3].toDouble(), boxes[i][2].toDouble()));
+  }
 
   @override
   void paint(Canvas canvas, Size size) async {
-    drawRects(canvas);
-    drawMasks(canvas);
-    drawCaptions(canvas, size);
+    var myCanvas = TouchyCanvas(context, canvas);
+
+    if (showParts) drawMasks(myCanvas, ModelType.parts);
+    if (showDamages) drawMasks(myCanvas, ModelType.damage);
   }
 
-  void drawRects(Canvas canvas) {
-    for (var rect in rects) {
+  void drawRects(Canvas canvas, ModelType model) {
+    for (var rect in getRects(model)) {
       canvas.drawRect(
           rect,
           Paint()
@@ -43,17 +40,24 @@ class PredictionPainter extends CustomPainter {
     }
   }
 
-  void drawMasks(Canvas canvas) {
+  void drawMasks(TouchyCanvas canvas, ModelType model) {
+    var rects = getRects(model);
     for (var i = 0; i < rects.length; i++) {
-      canvas.drawImage(masks[i], rects[i].topLeft, Paint());
+      var mask = predictions[model]!.masks[i];
+      canvas.drawImage(mask, rects[i].topLeft, Paint(), onTapDown: (details) {
+        print('asdas');
+      });
     }
   }
 
-  void drawCaptions(Canvas canvas, Size size) {
+  void drawCaptions(Canvas canvas, Size size, ModelType model) {
+    var rects = getRects(model);
     for (var i = 0; i < rects.length; i++) {
+      var className =
+          predictions[model]!.classNames[predictions[model]!.classIDs[i]];
+      var score = predictions[model]!.scores[i].toStringAsFixed(2);
       var builder = ui.ParagraphBuilder(ui.ParagraphStyle(fontSize: 50));
-      builder.addText(
-          '${classNames[classIDs[i]]} ${scores[i].toStringAsFixed(2)}');
+      builder.addText('$className $score');
       canvas.drawParagraph(
           builder.build()..layout(ui.ParagraphConstraints(width: size.width)),
           rects[i].topLeft);
@@ -62,32 +66,95 @@ class PredictionPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant PredictionPainter oldDelegate) {
-    return !listEquals(this.boxes, oldDelegate.boxes);
+    // return !listEquals(this.boxes, oldDelegate.boxes);
+    return true;
   }
 }
 
-class RawPage extends StatelessWidget {
-  const RawPage(this.image, {Key? key}) : super(key: key);
+class RawPage extends StatefulWidget {
   final PredictionImage? image;
+  final bool showParts;
+  final bool showDamages;
+
+  const RawPage(
+      {this.image,
+      required this.showParts,
+      required this.showDamages,
+      Key? key})
+      : super(key: key);
+
+  @override
+  _RawPageState createState() => _RawPageState();
+}
+
+class _RawPageState extends State<RawPage> {
+  PredictionImage? get image => widget.image;
+
+  bool _pagingEnabled = true;
+  final TransformationController _transformationController =
+      TransformationController();
 
   @override
   Widget build(BuildContext context) {
-    return image != null && image!.prediction != null
-        ? InteractiveViewer(
-            child: Container(
-              child: Center(
-                child: FittedBox(
-                  child: SizedBox(
-                    width: image!.width.toDouble(),
-                    height: image!.height.toDouble(),
-                    child: CustomPaint(
-                      foregroundPainter: PredictionPainter(image!.prediction!),
-                      child: image!.imageWidget(),
+    return image != null && image!.predictions.isNotEmpty
+        ? TabBarView(
+            physics: _pagingEnabled
+                ? PageScrollPhysics()
+                : NeverScrollableScrollPhysics(),
+            children: [
+              InteractiveViewer(
+                transformationController: _transformationController,
+                onInteractionStart: (details) {
+                  print('onInteractionStart');
+                },
+                onInteractionEnd: (details) {
+                  print('onInteractonEnd');
+                  setState(() {
+                    _pagingEnabled =
+                        _transformationController.value.getMaxScaleOnAxis() <=
+                            1;
+                  });
+                },
+                child: Container(
+                  color: Colors.black,
+                  child: Center(
+                    child: FittedBox(
+                      child: SizedBox(
+                        width: image!.width.toDouble(),
+                        height: image!.height.toDouble(),
+                        child: GestureDetector(
+                          onTapUp: (details) => print(
+                              '${details.globalPosition} ${details.localPosition}'),
+                          child: CustomPaint(
+                            foregroundPainter: PredictionPainter(
+                                context,
+                                image!.predictions,
+                                widget.showParts,
+                                widget.showDamages),
+                            child: image!.imageWidget(),
+                          ),
+                        ),
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
+              ListView.builder(
+                  itemCount: image!.intersections.length,
+                  itemBuilder: (context, index) {
+                    var className = image!
+                            .predictions[ModelType.parts]!.classNames[
+                        image!.predictions[ModelType.parts]!.classIDs[index]];
+                    className =
+                        className[0].toUpperCase() + className.substring(1);
+                    var damageCount = image!.intersections[index].length;
+                    var suffix = damageCount == 1 ? 'damage' : 'damages';
+                    return ListTile(
+                      title: Text(className),
+                      trailing: Text('$damageCount $suffix'),
+                    );
+                  })
+            ],
           )
         : Column(
             mainAxisAlignment: MainAxisAlignment.center,

@@ -1,6 +1,7 @@
 import 'dart:convert';
+import 'dart:math';
+import 'package:flutter/gestures.dart';
 import 'package:flutter_app/mrcnn/utils.dart';
-import 'package:image/image.dart' as image_package;
 import 'dart:io';
 import 'dart:ui' as ui;
 import 'dart:async';
@@ -10,18 +11,14 @@ import 'package:enum_to_string/enum_to_string.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_app/mrcnn/configs.dart';
-import 'package:flutter_app/mrcnn/visualize.dart';
 import 'package:flutter_app/pages/CameraPage.dart';
-import 'package:flutter_app/pages/MrcnnPage.dart';
 import 'package:flutter_app/pages/RawPage.dart';
 import 'package:flutter_app/pages/SettingsPage.dart';
 import 'package:flutter_app/pages/annotation_page/AnnotationPage.dart';
-import 'package:flutter_app/utils/ImageExtender.dart';
+import 'package:flutter_app/utils/PredictionImage.dart';
 import 'package:flutter_app/utils/isolate_utils.dart';
 import 'package:camera/camera.dart';
-import 'package:flutter_app/utils/prediction_result.dart';
 import 'package:tflite_flutter/tflite_flutter.dart' as tfl;
-import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 
@@ -35,7 +32,7 @@ enum WhereInference { device, server }
 enum ModelType { damage, parts }
 
 Future<void> main() async {
-  // debugPrintGestureArenaDiagnostics = true;
+  debugPrintGestureArenaDiagnostics = true;
   WidgetsFlutterBinding.ensureInitialized();
   cameras = await availableCameras();
   prefs = await SharedPreferences.getInstance();
@@ -45,6 +42,7 @@ Future<void> main() async {
   isPhysical = androidInfo.isPhysicalDevice ?? false;
   if (isPhysical) {
     print('This is real device');
+
     interpreters[ModelType.parts] =
         await tfl.Interpreter.fromAsset('car_parts_smallest_fixed_anno.tflite');
     interpreters[ModelType.damage] =
@@ -99,7 +97,8 @@ class MyHomePage extends StatefulWidget {
   _MyHomePageState createState() => _MyHomePageState();
 }
 
-class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
+class _MyHomePageState extends State<MyHomePage>
+    with WidgetsBindingObserver, SingleTickerProviderStateMixin {
   CameraController? cameraController;
 
   TextEditingController ipController = TextEditingController()
@@ -107,11 +106,17 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   TextEditingController portController = TextEditingController()
     ..text = prefs.getString('port') ?? '';
 
+  bool showParts = prefs.getBool('showParts') ?? true;
+
+  bool showDamages = prefs.getBool('showDamages') ?? true;
+
   bool saveExternal = prefs.getBool('saveExternal') ?? false;
 
   bool testImage = prefs.getBool('testImage') ?? false;
 
   bool get cameraEnabled => !testImage;
+
+  bool isDemo = prefs.getBool('isDemo') ?? false;
 
   bool doAnnotate = prefs.getBool('doAnnotate') ?? true;
 
@@ -119,13 +124,11 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
 
   bool annotatePageShowing = false;
 
-  String inferenceType = 'raw';
-
   List imageItems = prefs.getStringList('testImagesList') ?? [];
 
   int selectedImage = prefs.getInt('selectedImage') ?? 0;
 
-  ModelType model = ModelType.values[prefs.getInt('model') ?? 0];
+  // ModelType model = ModelType.values[prefs.getInt('model') ?? 0];
 
   bool socketConnected = false;
 
@@ -140,10 +143,9 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   int resultSize = 0;
 
   int selectedPage = 1;
-  PageController pageController = PageController(
-    initialPage: 1,
-    keepPage: true,
-  );
+
+  bool get showPrediction =>
+      selectedPage == 0 && image != null && image!.predictions.isNotEmpty;
 
   PredictionImage? image;
 
@@ -219,29 +221,35 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
           SnackBar(content: const Text('Can\'t run prediction on emulator')));
       return;
     }
+    if (inferenceOn == WhereInference.device && isDemo) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: const Text('Demo is available only on server')));
+      return;
+    }
 
     var _inferenceOn = inferenceOn;
 
-    if (cameraEnabled) {
-      XFile file = await cameraController!.takePicture();
-      image = PredictionImage.decodeImageFromPath(file.path);
-    } else {
-      var path = 'assets/images/${imageItems[selectedImage]}';
-      final byteData = await rootBundle.load(path);
-      image = PredictionImage.decodeImage(Uint8List.view(byteData.buffer))
-        ..path = path
-        ..isAsset = true;
-    }
-    if (doAnnotate)
-    // TODO: fix onSocket Error
-    {
-      annotatePageShowing = true;
-      image!.annotations = await Navigator.push(
-        context,
-        MaterialPageRoute(builder: (context) => AnnotationPage(image: image!)),
-      ).whenComplete(() => annotatePageShowing = false);
-      if (_inferenceOn == WhereInference.server && socketConnected == false)
-        return;
+    if (!isDemo) {
+      if (cameraEnabled) {
+        XFile file = await cameraController!.takePicture();
+        image = PredictionImage.decodeImageFromPath(file.path);
+      } else {
+        var path = 'assets/images/${imageItems[selectedImage]}';
+        final byteData = await rootBundle.load(path);
+        image = PredictionImage.decodeImage(Uint8List.view(byteData.buffer))
+          ..path = path
+          ..isAsset = true;
+      }
+      if (doAnnotate) {
+        annotatePageShowing = true;
+        image!.annotations = await Navigator.push(
+          context,
+          MaterialPageRoute(
+              builder: (context) => AnnotationPage(image: image!)),
+        ).whenComplete(() => annotatePageShowing = false);
+        if (_inferenceOn == WhereInference.server && socketConnected == false)
+          return;
+      }
     }
 
     predictDialogShowing = true;
@@ -267,7 +275,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
 
     switch (_inferenceOn) {
       case WhereInference.device:
-        var address = interpreters[model]!.address;
+        // var address = interpreters[model]!.address;
 
         ReceivePort receivePort = ReceivePort();
         Completer sendPortCompleter = new Completer<SendPort>();
@@ -279,8 +287,13 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
         });
         await Isolate.spawn(predictIsolate, receivePort.sendPort);
 
+        Map<ModelType, int> addresses = {};
+        interpreters.forEach((key, value) {
+          addresses[key] = value.address;
+        });
+
         SendPort sendPort = await sendPortCompleter.future;
-        sendPort.send(IsolateMsg(image!, address, model));
+        sendPort.send({'image': image!, "model_addresses": addresses});
         break;
 
       case WhereInference.server:
@@ -291,13 +304,18 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
           socket!.add(message);
         }
 
-        var imageEncoded = base64.encode(image!.encodeJpg);
-        _sendMessage(Uint8List.fromList(jsonEncode({
-          'model': EnumToString.convertToString(model),
-          'type': inferenceType,
-          'image': imageEncoded,
-          'annotations': image!.mapAnnotations
-        }).codeUnits));
+        var sendData;
+        if (isDemo) {
+          sendData = {'demo': true};
+        } else {
+          var imageEncoded = base64.encode(image!.encodeJpg);
+          sendData = {
+            'image': imageEncoded,
+            'annotations': image!.mapAnnotations
+          };
+        }
+
+        _sendMessage(Uint8List.fromList(jsonEncode(sendData).codeUnits));
         break;
     }
   }
@@ -310,46 +328,47 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
         print(response['message']);
         setPredictMessage = response['message'];
         break;
-      case 'Results raw':
-        List boxes = response['boxes']!;
-        List<ui.Image> masks = [];
-        for (var i = 0; i < boxes.length; i++) {
-          List mask = response['masks']![i];
-          List bbox = boxes[i];
-
-          var hsv = HSVColor.fromAHSV(1.0, i / boxes.length * 360.0, 1.0, 1);
-          var rgb = hsv.toColor();
-
-          masks.add(await unmoldBboxMask(mask, bbox, color: rgb));
+      case 'Results':
+        if (response.containsKey('image')) {
+          image = PredictionImage.decodeImage(base64Decode(response['image']));
+          await image!.saveToTempDir('demo.jpg');
         }
 
-        image!.prediction = PredictionResult(
-            boxes: boxes,
-            masks: masks,
-            classIDs: response['class_ids'],
-            scores: response['scores'],
-            model: model);
+        for (var modelKey in response['predictions'].keys) {
+          ModelType modelType =
+              EnumToString.fromString(ModelType.values, modelKey)!;
 
+          Map prediction = response['predictions'][modelKey];
+          List boxes = prediction['boxes']!;
+          List<ui.Image> masks = [];
+
+          for (var i = 0; i < boxes.length; i++) {
+            List mask = prediction['masks']![i];
+            List bbox = boxes[i];
+
+            var color;
+            if (modelType == ModelType.damage)
+              color = Color.fromARGB(255, 255, 0, 0);
+            else {
+              // var hsv =
+              //     HSVColor.fromAHSV(1.0, i / boxes.length * 360.0, 1.0, 1.0);
+              // color = hsv.toColor();
+              color = Color.fromARGB(255, 0, 255, 255);
+            }
+            masks.add(await unmoldBboxMask(mask, bbox, color: color));
+          }
+
+          image!.predictions[modelType] = PredictionResult(
+              boxes: boxes,
+              masks: masks,
+              classIDs: prediction['class_ids'],
+              scores: prediction['scores'],
+              classNames: response.containsKey('classes')
+                  ? response['classes'][modelKey]
+                  : CLASS_NAMES[modelType]);
+          image!.intersections = response['intersections'];
+        }
         // TODO: isnt better to use named pop?
-        if (predictDialogShowing) Navigator.pop(context);
-        jumpToPage(0);
-        break;
-      case 'Results image':
-        var img;
-        if (response.containsKey('masks'))
-          img = displayInstances(image!, response['rois'], response['masks'],
-              response['class_ids'], CLASS_NAMES[model],
-              scores: response['scores']);
-        else {
-          var imageDecoded = base64Decode(response['image']);
-          img = PredictionImage.decodeImage(imageDecoded);
-        }
-        var path = DateFormat('yyyyMMdd_HH_mm_ss').format(DateTime.now()) +
-            '_server.png';
-        await img.saveToTempDir(path);
-        // saveResultExternal(path);
-
-        image!.prediction = PredictionResult.fromResult(response, model);
         if (predictDialogShowing) Navigator.pop(context);
         jumpToPage(0);
         break;
@@ -427,33 +446,65 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    inferenceType = 'raw';
-    return Scaffold(
-      resizeToAvoidBottomInset: false,
-      backgroundColor: selectedPage != 2 ? Colors.black : null,
-      appBar: AppBar(
-        title: Text(widget.title),
-      ),
-      body: SafeArea(
-        child: WillPopScope(
-          onWillPop: () => Future.sync(onWillPop),
-          child: PageView(
-            controller: pageController,
-            physics: NeverScrollableScrollPhysics(),
-            onPageChanged: (int index) {
-              setState(() {
-                selectedPage = index;
-              });
-
-              if (index == 1)
-                initCameraController();
-              else {
-                cameraController?.dispose();
-                cameraController = null;
-              }
-            },
-            children: [
-              inferenceType == 'raw' ? RawPage(image) : MrcnnPage(image),
+    return DefaultTabController(
+      length: 2,
+      child: Scaffold(
+        resizeToAvoidBottomInset: false,
+        backgroundColor: selectedPage == 1 ? Colors.black : null,
+        appBar: AppBar(
+          title: Text(widget.title),
+          actions: showPrediction
+              ? [
+                  PopupMenuButton(itemBuilder: (context) {
+                    return [
+                      CheckedPopupMenuItem(
+                        value: 0,
+                        checked: showParts,
+                        child: Text('Show parts'),
+                      ),
+                      CheckedPopupMenuItem(
+                        value: 1,
+                        checked: showDamages,
+                        child: Text('Show damages'),
+                      )
+                    ];
+                  }, onSelected: (value) {
+                    setState(() {
+                      switch (value) {
+                        case 0:
+                          showParts = !showParts;
+                          prefs.setBool('showParts', showParts);
+                          break;
+                        case 1:
+                          showDamages = !showDamages;
+                          prefs.setBool('showDamages', showDamages);
+                          break;
+                      }
+                    });
+                  }),
+                ]
+              : null,
+          bottom: showPrediction
+              ? TabBar(
+                  tabs: [
+                    Tab(
+                      text: 'Image',
+                    ),
+                    Tab(
+                      text: 'Damage list',
+                    )
+                  ],
+                )
+              : null,
+        ),
+        body: SafeArea(
+          child: Center(
+            child: [
+              RawPage(
+                image: image,
+                showParts: showParts,
+                showDamages: showDamages,
+              ),
               CameraPage(
                 cameraController: cameraController,
                 cameraEnabled: cameraEnabled,
@@ -482,6 +533,13 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
                   });
                   prefs.setBool('testImage', value);
                 },
+                isDemo: isDemo,
+                onDemo: (bool value) {
+                  setState(() {
+                    isDemo = value;
+                  });
+                  prefs.setBool('isDemo', value);
+                },
                 doAnnotate: doAnnotate,
                 onDoAnnotate: (bool value) {
                   setState(() {
@@ -489,55 +547,38 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
                   });
                   prefs.setBool('doAnnotate', value);
                 },
-                model: model,
-                onModelType: (ModelType? value) {
-                  setState(() {
-                    model = value!;
-                  });
-                  prefs.setInt('model', value!.index);
-                },
               ),
-            ],
+            ].elementAt(selectedPage),
           ),
         ),
-      ),
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: selectedPage,
-        onTap: jumpToPage,
-        items: [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.image),
-            label: 'Image',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(
-              Icons.camera,
+        bottomNavigationBar: BottomNavigationBar(
+          currentIndex: selectedPage,
+          onTap: jumpToPage,
+          items: [
+            BottomNavigationBarItem(
+              icon: Icon(Icons.image),
+              label: 'Image',
             ),
-            label: 'Camera',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.settings),
-            label: 'Settings',
-          ),
-        ],
+            BottomNavigationBarItem(
+              icon: Icon(
+                Icons.camera,
+              ),
+              label: 'Camera',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.settings),
+              label: 'Settings',
+            ),
+          ],
+        ),
       ),
     );
-  }
-
-  bool onWillPop() {
-    if (pageController.page!.round() == pageController.initialPage)
-      return true;
-    else {
-      selectedPage -= 1;
-      pageController.jumpToPage(selectedPage);
-      return false;
-    }
   }
 
   void jumpToPage(int index) {
     setState(() {
       selectedPage = index;
-      pageController.jumpToPage(index);
+      // pageController.jumpToPage(index);
     });
   }
 

@@ -1,4 +1,4 @@
-import 'package:flutter_app/utils/ImageExtender.dart';
+import 'package:flutter_app/utils/PredictionImage.dart';
 import 'package:tflite_flutter/tflite_flutter.dart';
 import 'package:image/image.dart' as ImagePackage;
 import 'package:flutter/material.dart';

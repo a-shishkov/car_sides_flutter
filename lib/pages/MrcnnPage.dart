@@ -1,4 +1,4 @@
-import 'dart:io';
+/* import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_app/utils/ImageExtender.dart';
 import 'package:flutter_app/utils/prediction_result.dart';
@@ -15,7 +15,7 @@ class MrcnnPage extends StatelessWidget {
 
   bool get isAsset => image!.isAsset;
 
-  PredictionResult? get prediction => image?.prediction;
+  PredictionResult? get prediction => image?.damage;
 
   ModelType get model => prediction!.model;
 
@@ -23,10 +23,10 @@ class MrcnnPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (image != null && prediction != null) {
-      var model = image!.prediction!.model;
-      var classIds = image!.prediction!.classIDs;
-      var boxes = image!.prediction!.boxes;
-      var scores = image!.prediction!.scores;
+      var model = image!.damage!.model;
+      var classIds = image!.damage!.classIDs;
+      var boxes = image!.damage!.boxes;
+      var scores = image!.damage!.scores;
 
       return Container(
         child: ListView.builder(
@@ -112,3 +112,4 @@ class MrcnnImage extends StatelessWidget {
     );
   }
 }
+ */

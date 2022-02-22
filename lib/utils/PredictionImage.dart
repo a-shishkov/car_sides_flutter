@@ -4,17 +4,42 @@ import 'dart:ui' as ui;
 import 'package:flutter/widgets.dart';
 import 'package:flutter_app/annotation/Annotation.dart';
 import 'package:flutter_app/mrcnn/utils.dart' as utils;
-import 'package:flutter_app/utils/prediction_result.dart';
 import 'package:image/image.dart' as image_package;
 import 'package:tflite_flutter/tflite_flutter.dart';
 import 'package:path_provider/path_provider.dart';
+
+import '../main.dart';
+
+class PredictionResult {
+  List boxes;
+  List<ui.Image> masks;
+  List classIDs;
+  List scores;
+  List classNames;
+
+  PredictionResult(
+      {required this.boxes,
+      required this.masks,
+      required this.classIDs,
+      required this.scores,
+      required this.classNames
+      });
+
+  PredictionResult.fromResult(Map result)
+      : this.boxes = result['boxes'],
+        this.classIDs = result['class_ids'],
+        this.scores = result['scores'],
+        this.masks = result['masks'],
+        this.classNames = result['classes'];
+}
 
 class PredictionImage {
   image_package.Image image;
   bool isAsset = false;
   String? path;
   List<Annotation>? annotations;
-  PredictionResult? prediction;
+  Map<ModelType, PredictionResult> predictions = {};
+  List intersections = [];
 
   List<Map>? get mapAnnotations {
     if (annotations != null)

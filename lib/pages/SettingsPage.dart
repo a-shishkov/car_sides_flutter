@@ -7,24 +7,24 @@ class SettingsPage extends StatefulWidget {
   const SettingsPage(
       {required this.saveExternal,
       required this.testImage,
+      required this.isDemo,
       required this.doAnnotate,
-      required this.model,
       required this.onSaveExternal,
       required this.onTestImage,
+      required this.onDemo,
       required this.onDoAnnotate,
-      required this.onModelType,
       Key? key})
       : super(key: key);
 
   final bool saveExternal;
   final bool testImage;
+  final bool isDemo;
   final bool doAnnotate;
-  final ModelType model;
 
   final Function(bool value) onSaveExternal;
   final Function(bool value) onTestImage;
+  final Function(bool value) onDemo;
   final Function(bool value) onDoAnnotate;
-  final Function(ModelType? value) onModelType;
 
   @override
   _SettingsPageState createState() => _SettingsPageState();
@@ -61,25 +61,30 @@ class _SettingsPageState extends State<SettingsPage> {
               tileColor: Theme.of(context).colorScheme.surface,
             ),
             SwitchListTile(
+                title: Text('Demo'),
+                value: widget.isDemo,
+                onChanged: widget.onDemo,
+                tileColor: Theme.of(context).colorScheme.surface),
+            SwitchListTile(
               title: Text('Annotate images before inference'),
               value: widget.doAnnotate,
               onChanged: widget.onDoAnnotate,
               tileColor: Theme.of(context).colorScheme.surface,
             ),
-            ListTile(
-              title: Text('Model type'),
-              tileColor: Theme.of(context).colorScheme.surface,
-              trailing: DropdownButton(
-                value: widget.model,
-                items: ModelType.values
-                    .map((model) => DropdownMenuItem(
-                        child: Text(EnumToString.convertToString(model,
-                            camelCase: true)),
-                        value: model))
-                    .toList(),
-                onChanged: widget.onModelType,
-              ),
-            ),
+            // ListTile(
+            //   title: Text('Model type'),
+            //   tileColor: Theme.of(context).colorScheme.surface,
+            //   trailing: DropdownButton(
+            //     value: widget.model,
+            //     items: ModelType.values
+            //         .map((model) => DropdownMenuItem(
+            //             child: Text(EnumToString.convertToString(model,
+            //                 camelCase: true)),
+            //             value: model))
+            //         .toList(),
+            //     onChanged: widget.onModelType,
+            //   ),
+            // ),
             FutureBuilder(
               future: cacheDirImagesSize(),
               builder: (context, snapshot) {

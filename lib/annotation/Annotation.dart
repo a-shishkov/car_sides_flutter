@@ -1,6 +1,9 @@
 import 'dart:math';
 import 'dart:ui';
 
+import 'package:flutter_app/main.dart';
+import 'package:tflite_flutter_helper/tflite_flutter_helper.dart';
+
 class Position {
   int row;
   int column;
@@ -156,10 +159,11 @@ class Polygon {
 
 class Annotation {
   // String name;
+  ModelType superCategory;
   int categoryId;
   Polygon polygon;
 
-  Annotation(this.categoryId, this.polygon);
+  Annotation(this.superCategory, this.categoryId, this.polygon);
 
   List<int> get segmentation {
     List<int> segmentation = [];
@@ -170,8 +174,11 @@ class Annotation {
     return segmentation;
   }
 
-  Map<String, dynamic> get toMap =>
-      {'category_id': categoryId, 'segmentation': segmentation};
+  Map<String, dynamic> get toMap => {
+        'super_category': enumToString(superCategory),
+        'category_id': categoryId,
+        'segmentation': segmentation
+      };
 
   Polygon scalePolygon(double scaleX, double scaleY) {
     return Polygon(List.generate(

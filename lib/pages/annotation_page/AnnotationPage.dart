@@ -1,13 +1,12 @@
-import 'dart:io';
 import 'dart:math';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_app/annotation/Annotation.dart';
+import 'package:flutter_app/main.dart';
 import 'package:flutter_app/mrcnn/configs.dart';
 import 'package:flutter_app/pages/annotation_page/painters/PolygonPainter.dart';
-import 'package:flutter_app/utils/ImageExtender.dart';
+import 'package:flutter_app/utils/PredictionImage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-
 import 'Magnifier.dart';
 
 class AnnotationPage extends StatefulWidget {
@@ -55,6 +54,10 @@ class _AnnotationPageState extends State<AnnotationPage> {
   bool magnifierEnabled = false;
 
   Position? _selectedPoint;
+
+  ModelType modelType = ModelType.parts;
+
+  List<String> get classNames => CLASS_NAMES[modelType]!.skip(1).toList();
 
   Annotation get _currentAnnotation => annotations[_currentAnnotationIndex];
   int _currentAnnotationIndex = -1;
@@ -254,6 +257,11 @@ class _AnnotationPageState extends State<AnnotationPage> {
   }
 
   void onAddInstance() {
+    if (_currentAnnotation.polygon.length < 3) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: const Text('Add 3 points atleast')));
+      return;
+    }
     addNewAnnotationDialog();
   }
 
@@ -277,10 +285,10 @@ class _AnnotationPageState extends State<AnnotationPage> {
         widget.image.size.height / _imageKey.currentContext!.size!.height;
     Navigator.pop(
         context,
-        List<Annotation>.generate(
-            annotations.length,
-            (index) => Annotation(annotations[index].categoryId,
-                annotations[index].scalePolygon(scaleX, scaleY))));
+        annotations
+            .map((e) => Annotation(
+                e.superCategory, e.categoryId, e.scalePolygon(scaleX, scaleY)))
+            .toList());
   }
 
   void onCancel() {
@@ -290,64 +298,87 @@ class _AnnotationPageState extends State<AnnotationPage> {
   Future<bool> addNewAnnotationDialog() async {
     int categoryId = 0;
 
-    SharedPreferences prefs = await SharedPreferences.getInstance();
-    late List<String> classNames;
-    switch (prefs.getString('modelType') ?? 'parts') {
-      case 'parts':
-        classNames = CarPartsConfig.CLASS_NAMES;
-        break;
-      case 'damage':
-        classNames = CarDamageConfig.CLASS_NAMES;
-        break;
-      default:
-    }
-    classNames = classNames.skip(1).toList();
-
-    if (classNames.length < 2) {
-      ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Added ${classNames[0]}. Start annotating')));
-      setState(() {
-        _currentAnnotationIndex = annotations.length;
-      });
-      annotations.add(Annotation(categoryId + 1, Polygon([])));
-      return true;
-    }
     var result = await showDialog(
         context: context,
         builder: (BuildContext context) {
           return StatefulBuilder(builder: (context, setState) {
             return AlertDialog(
               title: const Text('New annotation'),
-              content: DropdownButton<int>(
-                value: categoryId,
-                onChanged: (int? value) {
-                  setState(() {
-                    categoryId = value!;
-                  });
-                },
-                items: classNames.map((String value) {
-                  return DropdownMenuItem(
-                    value: classNames.indexOf(value),
-                    child: Text(value),
-                  );
-                }).toList(),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    mainAxisSize: MainAxisSize.max,
+                    children: [
+                      Flexible(
+                        child: ListTile(
+                          contentPadding: EdgeInsets.only(right: 2),
+                          leading: Radio(
+                              value: ModelType.parts,
+                              groupValue: modelType,
+                              onChanged: (ModelType? value) {
+                                setState(() {
+                                  categoryId = 0;
+                                  modelType = value!;
+                                });
+                              }),
+                          title: Text('Parts'),
+                        ),
+                      ),
+                      Flexible(
+                        child: ListTile(
+                          contentPadding: EdgeInsets.only(left: 2),
+                          leading: Radio(
+                              value: ModelType.damage,
+                              groupValue: modelType,
+                              onChanged: (ModelType? value) {
+                                setState(() {
+                                  categoryId = 0;
+                                  modelType = value!;
+                                });
+                              }),
+                          title: Text('Damages'),
+                        ),
+                      ),
+                    ],
+                  ),
+                  DropdownButton<int>(
+                    value: categoryId,
+                    onChanged: (int? value) {
+                      setState(() {
+                        categoryId = value!;
+                      });
+                    },
+                    items: classNames.map((String value) {
+                      return DropdownMenuItem(
+                        value: classNames.indexOf(value),
+                        child: Text(value),
+                      );
+                    }).toList(),
+                  ),
+                ],
               ),
               actions: [
                 TextButton(
                     onPressed: () => Navigator.pop(context, null),
                     child: Text('Cancel')),
                 TextButton(
-                    onPressed: () => Navigator.pop(context, categoryId),
+                    onPressed: () => Navigator.pop(context, {
+                          'super_category': modelType,
+                          'category_id': categoryId
+                        }),
                     child: Text('Add'))
               ],
             );
           });
         });
+
     if (result != null) {
       setState(() {
         _currentAnnotationIndex = annotations.length;
       });
-      annotations.add(Annotation(categoryId + 1, Polygon([])));
+      annotations.add(Annotation(modelType, categoryId + 1, Polygon([])));
       return true;
     }
     return false;
