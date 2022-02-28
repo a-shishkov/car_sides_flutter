@@ -23,10 +23,16 @@ class PredictionPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) async {
-    var myCanvas = TouchyCanvas(context, canvas);
+    // var myCanvas = TouchyCanvas(context, canvas);
 
-    if (showParts) drawMasks(myCanvas, ModelType.parts);
-    if (showDamages) drawMasks(myCanvas, ModelType.damage);
+    if (showParts) {
+      drawMasks(canvas, ModelType.parts);
+      // drawRects(canvas, ModelType.parts);
+    }
+    if (showDamages) {
+      drawMasks(canvas, ModelType.damage);
+      drawRects(canvas, ModelType.damage);
+    }
   }
 
   void drawRects(Canvas canvas, ModelType model) {
@@ -40,13 +46,11 @@ class PredictionPainter extends CustomPainter {
     }
   }
 
-  void drawMasks(TouchyCanvas canvas, ModelType model) {
+  void drawMasks(Canvas canvas, ModelType model) {
     var rects = getRects(model);
     for (var i = 0; i < rects.length; i++) {
       var mask = predictions[model]!.masks[i];
-      canvas.drawImage(mask, rects[i].topLeft, Paint(), onTapDown: (details) {
-        print('asdas');
-      });
+      canvas.drawImage(mask, rects[i].topLeft, Paint());
     }
   }
 
@@ -123,8 +127,39 @@ class _RawPageState extends State<RawPage> {
                         width: image!.width.toDouble(),
                         height: image!.height.toDouble(),
                         child: GestureDetector(
-                          onTapUp: (details) => print(
-                              '${details.globalPosition} ${details.localPosition}'),
+                          onTapUp: (details) {
+                            var modelType = ModelType.damage;
+                            var point = details.localPosition;
+                            var boxes = image!.predictions[modelType]!.boxes;
+                            for (var i = 0; i < boxes.length; i++) {
+                              var box = boxes[i];
+                              var x1 = box[1];
+                              var x2 = box[3];
+                              var y1 = box[0];
+                              var y2 = box[2];
+                              if (x1 <= point.dx &&
+                                  point.dx <= x2 &&
+                                  y1 <= point.dy &&
+                                  point.dy <= y2) {
+                                var damages = [];
+                                for (var j = 0;
+                                    j < image!.intersections.length;
+                                    j++) {
+                                  var intersection = image!.intersections[j];
+                                  var partsPredictions =
+                                      image!.predictions[ModelType.parts]!;
+                                  if (intersection.contains(i)) {
+                                    damages.add(partsPredictions.classNames[
+                                        partsPredictions.classIDs[j]]);
+                                  }
+                                }
+
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                        content: Text('Damage on $damages')));
+                              }
+                            }
+                          },
                           child: CustomPaint(
                             foregroundPainter: PredictionPainter(
                                 context,

@@ -29,7 +29,7 @@ Map<ModelType, tfl.Interpreter> interpreters = {};
 late SharedPreferences prefs;
 
 enum WhereInference { device, server }
-enum ModelType { damage, parts }
+enum ModelType { damage, parts, damaged_parts }
 
 Future<void> main() async {
   debugPrintGestureArenaDiagnostics = true;
