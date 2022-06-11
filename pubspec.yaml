@@ -36,6 +36,7 @@ dependencies:
   enum_to_string: ^2.0.1
   device_info_plus: ^3.2.1
   touchable: ^1.0.0
+  dio: ^4.0.6
 
 dev_dependencies:
   flutter_test:
