@@ -10,6 +10,7 @@ class CameraPage extends StatefulWidget {
       required this.cameraEnabled,
       required this.imageItems,
       required this.inferenceOn,
+      required this.isDemo,
       required this.onChangedDevice,
       required this.onChangedServer,
       required this.onImageChanged,
@@ -23,6 +24,7 @@ class CameraPage extends StatefulWidget {
   final int? initialImage;
   final List imageItems;
   final WhereInference inferenceOn;
+  final bool isDemo;
   final Function() onTakePicture;
   final Function() onChangedDevice;
   final Function() onChangedServer;
@@ -55,43 +57,54 @@ class _CameraPageState extends State<CameraPage> {
     super.didUpdateWidget(oldWidget);
   }
 
+  Widget cameraWidget() {
+    if (widget.isDemo)
+      return Center(
+        child: Text(
+          'Demo image is only on server.',
+          textAlign: TextAlign.center,
+          style: TextStyle(color: Colors.white, fontSize: 25),
+        ),
+      );
+
+    if (!widget.cameraEnabled)
+      return Stack(alignment: Alignment.center, children: [
+        PhotoViewGallery.builder(
+            pageController: pageController,
+            onPageChanged: imagePageChanged,
+            itemCount: widget.imageItems.length,
+            builder: (BuildContext context, int index) {
+              return PhotoViewGalleryPageOptions(
+                  maxScale: PhotoViewComputedScale.contained,
+                  minScale: PhotoViewComputedScale.contained,
+                  imageProvider:
+                      AssetImage('assets/images/${widget.imageItems[index]}'));
+            }),
+        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+          Icon(
+            Icons.arrow_back_ios_rounded,
+            color: Colors.white,
+          ),
+          Icon(
+            Icons.arrow_forward_ios_rounded,
+            color: Colors.white,
+          )
+        ])
+      ]);
+
+    if (widget.cameraController != null &&
+        widget.cameraController!.value.isInitialized)
+      return CameraPreview(widget.cameraController!);
+
+    return Center(child: CircularProgressIndicator());
+  }
+
   @override
   Widget build(BuildContext context) {
     return Stack(
       alignment: Alignment.bottomCenter,
       children: [
-        widget.cameraEnabled
-            ? widget.cameraController != null &&
-                    widget.cameraController!.value.isInitialized
-                ? CameraPreview(widget.cameraController!)
-                : Center(
-                    child: CircularProgressIndicator(),
-                  )
-            : Stack(alignment: Alignment.center, children: [
-                PhotoViewGallery.builder(
-                    pageController: pageController,
-                    onPageChanged: imagePageChanged,
-                    itemCount: widget.imageItems.length,
-                    builder: (BuildContext context, int index) {
-                      return PhotoViewGalleryPageOptions(
-                          maxScale: PhotoViewComputedScale.contained,
-                          minScale: PhotoViewComputedScale.contained,
-                          imageProvider: AssetImage(
-                              'assets/images/${widget.imageItems[index]}'));
-                    }),
-                Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Icon(
-                        Icons.arrow_back_ios_rounded,
-                        color: Colors.white,
-                      ),
-                      Icon(
-                        Icons.arrow_forward_ios_rounded,
-                        color: Colors.white,
-                      )
-                    ])
-              ]),
+        cameraWidget(),
         Container(
           color: Colors.black45,
           child: Row(

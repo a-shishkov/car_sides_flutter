@@ -98,6 +98,8 @@ class _RawPageState extends State<RawPage> {
   final TransformationController _transformationController =
       TransformationController();
 
+
+
   @override
   Widget build(BuildContext context) {
     return image != null && image!.predictions.isNotEmpty

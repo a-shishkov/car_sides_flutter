@@ -511,6 +511,7 @@ class _MyHomePageState extends State<MyHomePage>
                 imageItems: imageItems,
                 initialImage: selectedImage,
                 inferenceOn: inferenceOn,
+                isDemo: isDemo,
                 onTakePicture: startPrediction,
                 onChangedDevice: changeDevice,
                 onChangedServer: changeServer,
