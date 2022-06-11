@@ -1,135 +1,87 @@
+import 'dart:convert';
+import 'dart:math';
+import 'package:flutter/gestures.dart';
+import 'package:flutter_app/mrcnn/utils.dart';
 import 'dart:io';
+import 'dart:ui' as ui;
 import 'dart:async';
+import 'dart:isolate';
+import 'dart:typed_data';
+import 'package:enum_to_string/enum_to_string.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/widgets.dart';
-import 'package:provider/provider.dart';
-import 'package:sides/sides.dart';
-import 'package:intl/intl.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_app/mrcnn/configs.dart';
+import 'package:flutter_app/pages/CameraPage.dart';
+import 'package:flutter_app/pages/RawPage.dart';
+import 'package:flutter_app/pages/SettingsPage.dart';
+import 'package:flutter_app/pages/annotation_page/AnnotationPage.dart';
+import 'package:flutter_app/utils/PredictionImage.dart';
+import 'package:flutter_app/utils/isolate_utils.dart';
+import 'package:camera/camera.dart';
+import 'package:tflite_flutter/tflite_flutter.dart' as tfl;
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:device_info_plus/device_info_plus.dart';
 
-// import 'package:camera/camera.dart';
-import 'package:flutter_better_camera/camera.dart';
-import 'package:strings/strings.dart';
-import 'package:image/image.dart' as ImagePackage;
-import 'package:f_logs/f_logs.dart';
+List<CameraDescription> cameras = [];
 
-import 'package:path_provider/path_provider.dart';
-//Possible classes
+bool isPhysical = true;
+Map<ModelType, tfl.Interpreter> interpreters = {};
+late SharedPreferences prefs;
 
-class CameraInterface {
-  late CameraController controller;
-  late Future<void> initializeControllerFuture;
-  late bool cameraStarted = false;
-
-  static late final List<CameraDescription> cameras;
-
-  static camerasInitialize() async {
-    WidgetsFlutterBinding.ensureInitialized();
-    cameras = await availableCameras();
-  }
-
-  controllerInitialize(camera, ResolutionPreset res) {
-    cameraStarted = true;
-    controller = CameraController(
-      camera,
-      res,
-      enableAudio: false,
-      flashMode: FlashMode.off,
-      // imageFormatGroup: ImageFormatGroup.yuv420,
-    );
-    initializeControllerFuture = controller.initialize();
-  }
-}
-
-class Img {
-  File? file;
-  ImagePackage.Image? image;
-  String? size;
-  late Future _doneFuture;
-
-  String? path;
-
-  Img({this.path, this.file}) {
-    if (path != null) {
-      this.file = File(path!);
-    }
-    image = ImagePackage.decodeImage(file!.readAsBytesSync());
-    _doneFuture = init();
-  }
-
-  setPath(path) => this.path = path;
-
-  crop(int x, int y, int w, int h) async {
-    image = ImagePackage.copyCrop(image!, x, y, w, h);
-    File(path!).writeAsBytesSync(ImagePackage.encodeJpg(image!));
-    file = File(path!);
-    await init();
-  }
-
-  resize(int width, int height) async {
-    image = ImagePackage.copyResize(image!, width: width, height: height);
-    File(path!).writeAsBytesSync(ImagePackage.encodeJpg(image!));
-    file = File(path!);
-    await init();
-  }
-
-  Future init() async {
-    size = await getFileSize(file!, 2);
-  }
-
-  int get width => image!.width;
-
-  int get height => image!.height;
-
-  String get resolution => "$width" + "x" + "$height";
-
-  String toString() {
-    return resolution + " " + size!;
-  }
-
-  Future get initializationDone => _doneFuture;
-}
-
-//All functions are in sides.dart -> packages/sides/lib/sides.dart
+enum WhereInference { device, server }
+enum ModelType { damage, parts, damaged_parts }
 
 Future<void> main() async {
-  await CameraInterface.camerasInitialize();
-  await CarSides.loadAsset();
-  // FLog.printLogs();
-  runApp(
-    MultiProvider(
-      providers: [
-        ChangeNotifierProvider<SingleNotifier>(
-          create: (_) => SingleNotifier(),
-        ),
-      ],
-      child: MyApp(),
-    ),
-  );
+  debugPrintGestureArenaDiagnostics = true;
+  WidgetsFlutterBinding.ensureInitialized();
+  cameras = await availableCameras();
+  prefs = await SharedPreferences.getInstance();
+
+  var deviceInfo = DeviceInfoPlugin();
+  var androidInfo = await deviceInfo.androidInfo;
+  isPhysical = androidInfo.isPhysicalDevice ?? false;
+  if (isPhysical) {
+    print('This is real device');
+
+    interpreters[ModelType.parts] =
+        await tfl.Interpreter.fromAsset('car_parts_smallest_fixed_anno.tflite');
+    interpreters[ModelType.damage] =
+        await tfl.Interpreter.fromAsset('car_damage.tflite');
+  } else {
+    print('This is emulator');
+  }
+  initImages();
+  runApp(MyApp());
+}
+
+Future initImages() async {
+  final manifestContent = await rootBundle.loadString('AssetManifest.json');
+
+  final Map<String, dynamic> manifestMap = json.decode(manifestContent);
+
+  var imagePaths =
+      manifestMap.keys.where((String key) => key.contains('images/')).toList();
+
+  imagePaths = List.generate(
+      imagePaths.length, (index) => imagePaths[index].split('/').last);
+
+  await prefs.setStringList('testImagesList', imagePaths);
 }
 
 class MyApp extends StatelessWidget {
-  // This widget is the root of your application.
-  // final CameraDescription camera;
-
   MyApp({Key? key}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // Try running your application with "flutter run". You'll see the
-        // application has a blue toolbar. Then, without quitting the app, try
-        // changing the primarySwatch below to Colors.green and then invoke
-        // "hot reload" (press "r" in the console where you ran "flutter run",
-        // or simply save your changes to "hot reload" in a Flutter IDE).
-        // Notice that the counter didn't reset back to zero; the application
-        // is not restarted.
-        // primarySwatch: Colors.orange,
         brightness: Brightness.light,
+        useMaterial3: true,
       ),
-      darkTheme: ThemeData(brightness: Brightness.dark),
+      darkTheme: ThemeData(
+        brightness: Brightness.dark,
+        useMaterial3: true,
+      ),
       themeMode: ThemeMode.system,
       home: MyHomePage('TF Car Sides'),
     );
@@ -137,17 +89,7 @@ class MyApp extends StatelessWidget {
 }
 
 class MyHomePage extends StatefulWidget {
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
-
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
   final String title;
-
-  // final CameraDescription camera;
 
   MyHomePage(this.title, {Key? key}) : super(key: key);
 
@@ -155,610 +97,615 @@ class MyHomePage extends StatefulWidget {
   _MyHomePageState createState() => _MyHomePageState();
 }
 
-class _MyHomePageState extends State<MyHomePage> {
-  Img? _imageFile;
+class _MyHomePageState extends State<MyHomePage>
+    with WidgetsBindingObserver, SingleTickerProviderStateMixin {
+  CameraController? cameraController;
 
-  // Img? _croppedImage;
-  List<CarSides>? _predictedSideList;
-  late CarSides _predictedSide;
-  late CarSides _realSide;
+  TextEditingController ipController = TextEditingController()
+    ..text = prefs.getString('ip') ?? '';
+  TextEditingController portController = TextEditingController()
+    ..text = prefs.getString('port') ?? '';
 
-  late ImagePreviewPage _pictureScreen =
-      new ImagePreviewPage(CameraInterface.cameras.first);
+  bool showParts = prefs.getBool('showParts') ?? true;
 
-  int _selectedIndex = 0;
-  PageController pageController = PageController(
-    initialPage: 0,
-    keepPage: true,
-  );
+  bool showDamages = prefs.getBool('showDamages') ?? true;
 
-//Take a picture
-  Future getImage() async {
-    print(_pictureScreen.cameraInterface.controller.flashMode);
-    FLog.info(
-        className: "MyHomePage",
-        methodName: "getImage",
-        text: "getImage() started");
-    try {
-      if (!_pictureScreen.cameraInterface.controller.value.isInitialized!) {
-        FLog.warning(
-            className: "MyHomePage",
-            methodName: "getImage",
-            text: "camera not initialized");
-        return;
-      } else {
-        FLog.info(
-            className: "MyHomePage",
-            methodName: "getImage",
-            text: "camera initialized");
-      }
-      // await _pictureScreen.cameraInterface.initializeControllerFuture;
-      // XFile xImage =
-      //     await _pictureScreen.cameraInterface.controller.takePicture();
-      var cacheDir = await getTemporaryDirectory();
+  bool saveExternal = prefs.getBool('saveExternal') ?? false;
 
-      var now = DateTime.now();
-      var formatter = DateFormat('yyyyMMdd_HH_mm_ss');
-      String currentTimeStamp = formatter.format(now);
+  bool testImage = prefs.getBool('testImage') ?? false;
 
+  bool get cameraEnabled => !testImage;
 
-      var path = cacheDir.path + "/" + currentTimeStamp;
-      // var path = cacheDir.path + "/thumbnail.jpg";
-      // if (await File(path).exists()) {
-      //   print("file exist");
-      //   File(path).delete();
-      // }
+  bool isDemo = prefs.getBool('isDemo') ?? false;
 
-      try {
-        if (_pictureScreen.cameraInterface.controller.value.isTakingPicture!) {
-          FLog.warning(
-              className: "MyHomePage",
-              methodName: "getImage",
-              text: "camera is taking picture");
-          return;
-        }
-        await _pictureScreen.cameraInterface.controller.takePicture(path);
-      } catch (e) {
-        FLog.error(
-            className: "MyHomePage",
-            methodName: "getImage takePicture()",
-            text: "$e");
-      }
+  bool doAnnotate = prefs.getBool('doAnnotate') ?? true;
 
-      _imageFile = Img(path: path);
-      await _imageFile!.initializationDone;
-      FLog.info(
-          className: "MyHomePage",
-          methodName: "getImage",
-          text: "image path: $path");
-      // var cacheDir = await getTemporaryDirectory();
-      // _croppedImage = _imageFile;
-      // _croppedImage!.setPath('${cacheDir.path}/thumbnail.jpg');
-      FLog.info(
-          className: "MyHomePage",
-          methodName: "getImage",
-          text: "image resolution: ${_imageFile!.resolution}");
+  bool predictDialogShowing = false;
 
-      if (_imageFile!.width < _imageFile!.height) {
-        FLog.info(
-            className: "MyHomePage",
-            methodName: "getImage",
-            text: "height > width");
-        await _imageFile!.crop(0, (_imageFile!.height - _imageFile!.width) ~/ 2,
-            _imageFile!.width, _imageFile!.width);
-      } else {
-        FLog.info(
-            className: "MyHomePage",
-            methodName: "getImage",
-            text: "width > height");
-        await _imageFile!.crop((_imageFile!.width - _imageFile!.height) ~/ 2, 0,
-            _imageFile!.height, _imageFile!.height);
-      }
+  bool annotatePageShowing = false;
 
-      FLog.info(
-          className: "MyHomePage",
-          methodName: "getImage",
-          text: "croppedImage resolution: ${_imageFile!.resolution}");
+  List imageItems = prefs.getStringList('testImagesList') ?? [];
 
-      await _imageFile!.resize(256, 256);
+  int selectedImage = prefs.getInt('selectedImage') ?? 0;
 
-      _predictedSideList = await predict(_imageFile!.file!);
-      _predictedSide = _predictedSideList![0];
+  // ModelType model = ModelType.values[prefs.getInt('model') ?? 0];
 
-      setState(() {
-        _onItemTapped(1);
-      });
-      _realSide = await _showSingleChoiceDialog(context);
-      print("RealSide: " + _realSide.label);
+  bool socketConnected = false;
 
-      FLog.info(
-          className: "MyHomePage",
-          methodName: "getImage",
-          text: "realSide: $_realSide, predictedSide: $_predictedSide");
+  final ValueNotifier<String> predictMessage = ValueNotifier('Sending image');
 
-      // setState(() {});
-      var uploaded = false;
-      uploaded = await uploadImage(_imageFile!.file!, _predictedSide,
-          _realSide); //TODO: Finish upload function in sides.dart
-      if (uploaded == false) {
-        await save(_imageFile!.file!, _predictedSide,
-            _realSide); //Saves image with correct naming
-      }
-      await backup();
+  set setPredictMessage(String message) => predictMessage.value = message;
 
-      File(path).delete();
-    } catch (e) {
-      FLog.error(className: "MyHomePage", methodName: "getImage", text: "$e");
-    }
-  }
+  WhereInference inferenceOn = WhereInference.device;
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.title),
-      ),
-      body: WillPopScope(
-          onWillPop: () => Future.sync(onWillPop), child: buildPageView()),
-      bottomNavigationBar: BottomNavigationBar(
-        items: buildBottomNavBarItems(),
-        currentIndex: _selectedIndex,
-        onTap: _onItemTapped,
-      ),
-      floatingActionButton: _buttonFAB(),
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
-    );
-  }
+  Socket? socket;
 
-  bool onWillPop() {
-    if (pageController.page!.round() == pageController.initialPage)
-      return true;
-    else {
-      pageController.previousPage(
-        duration: Duration(milliseconds: 200),
-        curve: Curves.linear,
-      );
-      return false;
-    }
-  }
+  int resultSize = 0;
 
-  Widget buildPageView() {
-    return PageView(
-      controller: pageController,
-      physics: NeverScrollableScrollPhysics(),
-      onPageChanged: _pageChanged,
-      children: <Widget>[
-        _pictureScreen,
-        ImageInfoPage(_imageFile, _predictedSideList),
-        LogPage()
-      ],
-    );
-  }
+  int selectedPage = 1;
 
-  void _pageChanged(int index) {
-    setState(() {
-      _selectedIndex = index;
-    });
-  }
+  bool get showPrediction =>
+      selectedPage == 0 && image != null && image!.predictions.isNotEmpty;
 
-  void _onItemTapped(int index) {
-    setState(() {
-      _selectedIndex = index;
-      pageController.animateToPage(index,
-          duration: Duration(milliseconds: 500), curve: Curves.ease);
-    });
-  }
-
-  List<BottomNavigationBarItem> buildBottomNavBarItems() {
-    return [
-      BottomNavigationBarItem(
-        icon: Icon(Icons.camera),
-        label: 'Camera',
-      ),
-      BottomNavigationBarItem(
-        icon: Icon(Icons.image),
-        label: 'Image',
-      ),
-      BottomNavigationBarItem(
-        icon: Icon(Icons.build),
-        label: 'Logs',
-      ),
-    ];
-  }
-
-  _buttonFAB() {
-    if (_selectedIndex == 0)
-      return FloatingActionButton(
-          onPressed: getImage,
-          tooltip: 'Pick Image',
-          child: Icon(Icons.add_a_photo));
-    else
-      return null;
-  }
-}
-
-class ImagePreviewPage extends StatefulWidget {
-  final CameraDescription? camera;
-  final CameraInterface cameraInterface = new CameraInterface();
-
-  ImagePreviewPage(this.camera, {Key? key}) : super(key: key);
-
-  controllerInitialize(ResolutionPreset res) =>
-      cameraInterface.controllerInitialize(camera, res);
-
-  @override
-  ImagePreviewPageState createState() => ImagePreviewPageState();
-}
-
-class ImagePreviewPageState extends State<ImagePreviewPage>
-    with WidgetsBindingObserver {
-  ResolutionPreset resolution = ResolutionPreset.high;
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    FLog.info(
-        className: "TakePictureScreenState",
-        methodName: "AppState",
-        text: "state changed to: $state");
-    // FLog.info(className: "TakePictureScreenState", methodName: "AppState", text: "cameraStarted: ${widget.cameraInterface.cameraStarted}");
-    if (!widget.cameraInterface.controller.value.isInitialized!) {
-      FLog.info(
-          className: "TakePictureScreenState",
-          methodName: "AppState",
-          text: "Controller not initialized");
-      return;
-    }
-    if (state == AppLifecycleState.inactive) {
-      FLog.info(
-          className: "TakePictureScreenState",
-          methodName: "AppState",
-          text: "Dispose camera");
-      widget.cameraInterface.controller.dispose();
-    } else if (state == AppLifecycleState.resumed) {
-      FLog.info(
-          className: "TakePictureScreenState",
-          methodName: "AppState",
-          text: "Initialize camera");
-      widget.controllerInitialize(resolution);
-      widget.cameraInterface.initializeControllerFuture
-          .then((value) => setState(() {}));
-    }
-
-    // if (!widget.cameraInterface.cameraStarted &&
-    //     state == AppLifecycleState.resumed) {
-    //   widget.controllerInitialize(resolution);
-    //   FLog.info(
-    //       className: "TakePictureScreenState",
-    //       methodName: "AppState",
-    //       text: "Initialize camera");
-    //   widget.cameraInterface.cameraStarted = true;
-    //   widget.cameraInterface.initializeControllerFuture
-    //       .then((value) => setState(() {}));
-    // } else if (widget.cameraInterface.cameraStarted) {
-    //   FLog.info(
-    //       className: "TakePictureScreenState",
-    //       methodName: "AppState",
-    //       text: "Dispose camera");
-    //   widget.cameraInterface.controller.dispose();
-    //   widget.cameraInterface.cameraStarted = false;
-    // }
-  }
+  PredictionImage? image;
 
   @override
   void initState() {
-    super.initState();
-    // To display the current output from the Camera,
-    // create a CameraController.
+    initCameraController();
     WidgetsBinding.instance!.addObserver(this);
+    super.initState();
   }
 
   @override
   void dispose() {
-    // Dispose of the controller when the widget is disposed.
-    // widget.cameraInterface.controller.dispose();
-    // widget.cameraInterface.cameraStarted = false;
+    ipController.dispose();
+    portController.dispose();
+    socket?.close();
     WidgetsBinding.instance!.removeObserver(this);
     super.dispose();
   }
 
   @override
-  Widget build(BuildContext context) {
-    final width = MediaQuery.of(context).size.width;
-    final height = MediaQuery.of(context).size.height;
-    if (!widget.cameraInterface.cameraStarted) {
-      if (width <= 365 && height < 600) {
-        resolution = ResolutionPreset.medium;
-        FLog.info(
-            className: "TakePictureScreenState",
-            methodName: "Build",
-            text: "Camera resolution changed: $resolution");
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    print('state changed to: $state');
+    // App state changed before we got the chance to initialize.
+    if (cameraController == null || !cameraController!.value.isInitialized)
+      return;
+
+    if (state == AppLifecycleState.inactive) {
+      cameraController?.dispose();
+    } else if (state == AppLifecycleState.resumed) {
+      initCameraController();
+    }
+  }
+
+  void initCameraController() async {
+    if (!cameraEnabled) return;
+    if (cameraController != null) await cameraController!.dispose();
+
+    cameraController = CameraController(
+      cameras[0],
+      ResolutionPreset.high,
+      enableAudio: false,
+    );
+    cameraController!.addListener(() {
+      if (mounted) setState(() {});
+      if (cameraController!.value.hasError) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(
+                'Camera error ${cameraController!.value.errorDescription}')));
       }
-      widget.controllerInitialize(resolution);
+    });
+
+    try {
+      await cameraController!.initialize();
+    } on CameraException catch (e) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(e.toString())));
+    }
+    if (mounted) setState(() {});
+  }
+
+/*   Future saveResultExternal(String path) async {
+    if (!saveExternal) return;
+    var imagePath = await image?.prediction?.image.saveToDownloadDir(path);
+    if (imagePath != null)
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Image saved to $imagePath'),
+      ));
+  } */
+
+  startPrediction() async {
+    if (inferenceOn == WhereInference.device && !isPhysical) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: const Text('Can\'t run prediction on emulator')));
+      return;
+    }
+    if (inferenceOn == WhereInference.device && isDemo) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: const Text('Demo is available only on server')));
+      return;
     }
 
-    return Container(
-      color: Colors.black,
-      child: FutureBuilder<void>(
-        future: widget.cameraInterface.initializeControllerFuture,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.done) {
-            try {
-              return Stack(alignment: FractionalOffset.center, children: [
-                Positioned.fill(
-                    child: AspectRatio(
-                        aspectRatio:
-                            widget.cameraInterface.controller.value.aspectRatio,
-                        child:
-                            CameraPreview(widget.cameraInterface.controller))),
-                Container(
-                  width: width,
-                  height: width,
-                  decoration: BoxDecoration(
-                    border: Border.all(color: Colors.greenAccent, width: 4),
-                  ),
+    var _inferenceOn = inferenceOn;
+
+    if (!isDemo) {
+      if (cameraEnabled) {
+        XFile file = await cameraController!.takePicture();
+        image = PredictionImage.decodeImageFromPath(file.path);
+      } else {
+        var path = 'assets/images/${imageItems[selectedImage]}';
+        final byteData = await rootBundle.load(path);
+        image = PredictionImage.decodeImage(Uint8List.view(byteData.buffer))
+          ..path = path
+          ..isAsset = true;
+      }
+      if (doAnnotate) {
+        annotatePageShowing = true;
+        image!.annotations = await Navigator.push(
+          context,
+          MaterialPageRoute(
+              builder: (context) => AnnotationPage(image: image!)),
+        ).whenComplete(() => annotatePageShowing = false);
+        if (_inferenceOn == WhereInference.server && socketConnected == false)
+          return;
+      }
+    }
+
+    predictDialogShowing = true;
+    showDialog(
+        barrierDismissible: false,
+        context: context,
+        builder: (BuildContext context) {
+          return ValueListenableBuilder(
+            valueListenable: predictMessage,
+            builder: (BuildContext context, String value, Widget? child) {
+              return AlertDialog(
+                scrollable: true,
+                content: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [child!, Text(value)],
                 ),
-              ]);
-            } catch (e) {
-              FLog.error(
-                  className: "TakePictureScreenState",
-                  methodName: "Build",
-                  text: "$e");
-              return const Center(child: CircularProgressIndicator());
+              );
+            },
+            child: CircularProgressIndicator(),
+          );
+        }).whenComplete(() => predictDialogShowing = false);
+
+    switch (_inferenceOn) {
+      case WhereInference.device:
+        // var address = interpreters[model]!.address;
+
+        ReceivePort receivePort = ReceivePort();
+        Completer sendPortCompleter = new Completer<SendPort>();
+
+        receivePort.listen((message) {
+          if (message is SendPort)
+            sendPortCompleter.complete(message);
+          else if (message is Map) handleResponse(message);
+        });
+        await Isolate.spawn(predictIsolate, receivePort.sendPort);
+
+        Map<ModelType, int> addresses = {};
+        interpreters.forEach((key, value) {
+          addresses[key] = value.address;
+        });
+
+        SendPort sendPort = await sendPortCompleter.future;
+        sendPort.send({'image': image!, "model_addresses": addresses});
+        break;
+
+      case WhereInference.server:
+        void _sendMessage(Uint8List message) {
+          var msgSize = ByteData(4);
+          msgSize.setInt32(0, message.length);
+          socket!.add(msgSize.buffer.asUint8List());
+          socket!.add(message);
+        }
+
+        var sendData;
+        if (isDemo) {
+          sendData = {'demo': true};
+        } else {
+          var imageEncoded = base64.encode(image!.encodeJpg);
+          sendData = {
+            'image': imageEncoded,
+            'annotations': image!.mapAnnotations
+          };
+        }
+
+        _sendMessage(Uint8List.fromList(jsonEncode(sendData).codeUnits));
+        break;
+    }
+  }
+
+  handleResponse(Map response) async {
+    print('Response: ${response['response']}');
+
+    switch (response['response']) {
+      case 'Message':
+        print(response['message']);
+        setPredictMessage = response['message'];
+        break;
+      case 'Results':
+        if (response.containsKey('image')) {
+          image = PredictionImage.decodeImage(base64Decode(response['image']));
+          await image!.saveToTempDir('demo.jpg');
+        }
+
+        for (var modelKey in response['predictions'].keys) {
+          ModelType modelType =
+              EnumToString.fromString(ModelType.values, modelKey)!;
+
+          Map prediction = response['predictions'][modelKey];
+          List boxes = prediction['boxes']!;
+          List<ui.Image> masks = [];
+
+          for (var i = 0; i < boxes.length; i++) {
+            List mask = prediction['masks']![i];
+            List bbox = boxes[i];
+
+            var color;
+            if (modelType == ModelType.damage)
+              color = Color.fromARGB(255, 255, 0, 0);
+            else {
+              // var hsv =
+              //     HSVColor.fromAHSV(1.0, i / boxes.length * 360.0, 1.0, 1.0);
+              // color = hsv.toColor();
+              color = Color.fromARGB(255, 0, 255, 255);
             }
-          } else {
-            // Otherwise, display a loading indicator.
-            return const Center(child: CircularProgressIndicator());
+            masks.add(await unmoldBboxMask(mask, bbox, color: color));
           }
-        },
+
+          image!.predictions[modelType] = PredictionResult(
+              boxes: boxes,
+              masks: masks,
+              classIDs: prediction['class_ids'],
+              scores: prediction['scores'],
+              classNames: response.containsKey('classes')
+                  ? response['classes'][modelKey]
+                  : CLASS_NAMES[modelType]);
+          image!.intersections = response['intersections'];
+        }
+        // TODO: isnt better to use named pop?
+        if (predictDialogShowing) Navigator.pop(context);
+        jumpToPage(0);
+        break;
+      case 'No results':
+        if (predictDialogShowing) Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: const Text('No instances found'),
+        ));
+        break;
+    }
+  }
+
+  void listenSocket() {
+    void _resetToDevice() {
+      setState(() {
+        inferenceOn = WhereInference.device;
+        socketConnected = false;
+      });
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Server disconnected')));
+    }
+
+    print(
+        'Connected to: ${socket!.remoteAddress.address}:${socket!.remotePort}');
+
+    bool firstMessage = true;
+    int readLen = 0;
+    int msgLen = 0;
+    List<int> msg = List.empty(growable: true);
+
+    socket!.listen(
+      (Uint8List data) async {
+        while (true) {
+          if (firstMessage) {
+            readLen = 0;
+            msg.clear();
+            msgLen = ByteData.view(data.sublist(0, 4).buffer)
+                .getInt32(0, Endian.big);
+            data = data.sublist(4, data.length);
+            firstMessage = false;
+          }
+
+          if (data.length + readLen < msgLen) {
+            msg.addAll(data);
+            readLen += data.length;
+            break;
+          } else {
+            msg.addAll(data.sublist(0, msgLen - readLen));
+
+            Map response = jsonDecode(String.fromCharCodes(msg));
+            handleResponse(response);
+
+            firstMessage = true;
+            if (data.length + readLen == msgLen) {
+              break;
+            }
+            data = data.sublist(msgLen - readLen);
+          }
+        }
+      },
+      onError: (error) {
+        print('onError $error');
+        // socket!.destroy();
+        // _resetToDevice();
+      },
+      onDone: () {
+        print('Server left. Done');
+        socket!.destroy();
+        _resetToDevice();
+        if (annotatePageShowing) Navigator.pop(context);
+        if (predictDialogShowing) Navigator.pop(context);
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return DefaultTabController(
+      length: 2,
+      child: Scaffold(
+        resizeToAvoidBottomInset: false,
+        backgroundColor: selectedPage == 1 ? Colors.black : null,
+        appBar: AppBar(
+          title: Text(widget.title),
+          actions: showPrediction
+              ? [
+                  PopupMenuButton(itemBuilder: (context) {
+                    return [
+                      CheckedPopupMenuItem(
+                        value: 0,
+                        checked: showParts,
+                        child: Text('Show parts'),
+                      ),
+                      CheckedPopupMenuItem(
+                        value: 1,
+                        checked: showDamages,
+                        child: Text('Show damages'),
+                      )
+                    ];
+                  }, onSelected: (value) {
+                    setState(() {
+                      switch (value) {
+                        case 0:
+                          showParts = !showParts;
+                          prefs.setBool('showParts', showParts);
+                          break;
+                        case 1:
+                          showDamages = !showDamages;
+                          prefs.setBool('showDamages', showDamages);
+                          break;
+                      }
+                    });
+                  }),
+                ]
+              : null,
+          bottom: showPrediction
+              ? TabBar(
+                  tabs: [
+                    Tab(
+                      text: 'Image',
+                    ),
+                    Tab(
+                      text: 'Damage list',
+                    )
+                  ],
+                )
+              : null,
+        ),
+        body: SafeArea(
+          child: Center(
+            child: [
+              RawPage(
+                image: image,
+                showParts: showParts,
+                showDamages: showDamages,
+              ),
+              CameraPage(
+                cameraController: cameraController,
+                cameraEnabled: cameraEnabled,
+                imageItems: imageItems,
+                initialImage: selectedImage,
+                inferenceOn: inferenceOn,
+                isDemo: isDemo,
+                onTakePicture: startPrediction,
+                onChangedDevice: changeDevice,
+                onChangedServer: changeServer,
+                onImageChanged: (int index) {
+                  selectedImage = index;
+                },
+              ),
+              SettingsPage(
+                saveExternal: saveExternal,
+                onSaveExternal: (bool value) {
+                  setState(() {
+                    saveExternal = value;
+                  });
+                  prefs.setBool('saveExternal', value);
+                },
+                testImage: testImage,
+                onTestImage: (bool value) {
+                  setState(() {
+                    testImage = value;
+                  });
+                  prefs.setBool('testImage', value);
+                },
+                isDemo: isDemo,
+                onDemo: (bool value) {
+                  setState(() {
+                    isDemo = value;
+                  });
+                  prefs.setBool('isDemo', value);
+                },
+                doAnnotate: doAnnotate,
+                onDoAnnotate: (bool value) {
+                  setState(() {
+                    doAnnotate = value;
+                  });
+                  prefs.setBool('doAnnotate', value);
+                },
+              ),
+            ].elementAt(selectedPage),
+          ),
+        ),
+        bottomNavigationBar: BottomNavigationBar(
+          currentIndex: selectedPage,
+          onTap: jumpToPage,
+          items: [
+            BottomNavigationBarItem(
+              icon: Icon(Icons.image),
+              label: 'Image',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(
+                Icons.camera,
+              ),
+              label: 'Camera',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.settings),
+              label: 'Settings',
+            ),
+          ],
+        ),
       ),
     );
   }
-}
 
-class SingleNotifier extends ChangeNotifier {
-  late String _currentSide;
-
-  SingleNotifier() {
-    _currentSide = CarSides.sides[0];
+  void jumpToPage(int index) {
+    setState(() {
+      selectedPage = index;
+      // pageController.jumpToPage(index);
+    });
   }
 
-  String get currentSide => _currentSide;
+  changeDevice() {
+    print('changeDevice');
+    if (inferenceOn == WhereInference.device) return;
 
-  updateSide(var value) {
-    if (value != _currentSide) {
-      _currentSide = value;
-      notifyListeners();
-    }
-  }
+    setState(() {
+      inferenceOn = WhereInference.device;
+    });
 
-  resetSide() {
-    _currentSide = CarSides.sides[0];
-  }
-}
-
-//Dialogue to ask for the real side
-Future<CarSides> _showSingleChoiceDialog(BuildContext context) {
-  SingleNotifier _singleNotifier = new SingleNotifier();
-  final completer = new Completer<CarSides>();
-  showDialog(
-      context: context,
-      builder: (context) {
-        _singleNotifier = Provider.of<SingleNotifier>(context);
-        return WillPopScope(
-          onWillPop: () async => false,
-          child: AlertDialog(
-            title: Text("Select the real side!"),
-            content: SingleChildScrollView(
-              child: Container(
-                width: double.infinity,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: CarSides.sides
-                      .map(
-                        (e) => RadioListTile(
-                          title: Text(capitalize(e)),
-                          value: e,
-                          groupValue: _singleNotifier.currentSide,
-                          selected: _singleNotifier.currentSide == e,
-                          onChanged: (value) {
-                            print(e);
-                            if (value != _singleNotifier.currentSide) {
-                              _singleNotifier.updateSide(value);
-                            }
-                          },
-                        ),
-                      )
-                      .toList(),
-                ),
-              ),
-            ),
-            actions: <Widget>[
-              new TextButton(
-                child: new Text("OK"),
-                onPressed: () {
-                  completer.complete(CarSides(_singleNotifier._currentSide));
-                  Navigator.of(context).pop();
-                  _singleNotifier.resetSide();
-                },
-              )
-            ],
-          ),
-        );
-      });
-  return completer.future;
-}
-
-class ImageInfoPage extends StatelessWidget {
-  final Img? image;
-  final List<CarSides>? carSidesList;
-
-  const ImageInfoPage(
-    this.image,
-    this.carSidesList, {
-    Key? key,
-  }) : super(key: key);
-
-  List<Widget> description() {
-    final TextStyle textStyle =
-        TextStyle(color: Colors.white70, fontWeight: FontWeight.bold);
-    List<Widget> widgetList = [];
-    widgetList.add(Row(
-      // mainAxisAlignment: MainAxisAlignment.spaceAround,
-      children: [
-        Text(
-          image!.size!,
-          style: textStyle,
-        ),
-        Spacer(),
-        Text(
-          image!.resolution,
-          style: textStyle,
-        )
-      ],
-    ));
-    carSidesList!.forEach((element) => widgetList.add(Row(
-          // mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: [
-            Text(
-              capitalize(element.label),
-              style: textStyle,
-            ),
-            Spacer(),
-            Text(
-              element.confidenceToPercent(),
-              style: textStyle,
-            )
-          ],
-        )));
-    return widgetList;
-  }
-
-  // void resizedImage()
-  // {
-  //   final img1 = ImagePackage.decodeImage(image!.file!.readAsBytesSync());
-  //   final img3 = ImagePackage.copyCrop();
-  //   final img2 = ImagePackage.copyResize(img1!, width: 240, height: 240);
-  //   File('thumbnail.png').writeAsBytesSync(ImagePackage.encodePng(img2));
-  //
-  // }
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: double.infinity,
-      color: Colors.black,
-      child: image == null
-          ? Icon(
-              Icons.image_not_supported,
-              color: Colors.white,
-              size: 100,
-            )
-          : Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Image.file(
-                  image!.file!,
-                  fit: BoxFit.fitWidth,
-                  width: double.infinity,
-                  // alignment: Alignment.center,
-                ),
-                Align(
-                  alignment: Alignment.bottomLeft,
-                  child: Container(
-                    // alignment: Alignment.bottomLeft,
-                    width: MediaQuery.of(context).size.width / 2,
-                    // height: 100,
-                    padding: EdgeInsets.symmetric(vertical: 10, horizontal: 15),
-                    margin: EdgeInsets.only(top: 10, left: 20),
-                    decoration: BoxDecoration(
-                      // color: Colors.white70,
-                      borderRadius: BorderRadius.all(
-                        Radius.circular(15),
-                      ),
-                    ),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.start,
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      // mainAxisSize: MainAxisSize.max,
-                      children: description(),
-                    ),
+    if (socketConnected)
+      showDialog(
+          barrierDismissible: false,
+          context: context,
+          builder: (context) {
+            return AlertDialog(
+                content: Text('Disconnect from server?'),
+                actions: [
+                  TextButton(
+                    onPressed: () {
+                      setState(() {
+                        inferenceOn = WhereInference.server;
+                      });
+                      Navigator.pop(context);
+                    },
+                    child: Text('No'),
                   ),
+                  TextButton(
+                    onPressed: () {
+                      socket!.destroy();
+                      setState(() {
+                        socketConnected = false;
+                      });
+                      Navigator.pop(context);
+                    },
+                    child: Text('Yes'),
+                  )
+                ]);
+          });
+  }
+
+  changeServer() async {
+    if (inferenceOn == WhereInference.server) return;
+
+    setState(() {
+      inferenceOn = WhereInference.server;
+    });
+
+    var socketConnecting = false;
+    await showDialog(
+        barrierDismissible: false,
+        context: context,
+        builder: (BuildContext context) {
+          return StatefulBuilder(
+              builder: (BuildContext context, setDialogState) {
+            return AlertDialog(
+              scrollable: true,
+              title: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text('Connect to server'),
+                  SizedBox(
+                      width: 10,
+                      height: 10,
+                      child:
+                          socketConnecting ? CircularProgressIndicator() : null)
+                ],
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: ipController,
+                    decoration: InputDecoration(labelText: 'Server IP'),
+                    keyboardType: TextInputType.number,
+                  ),
+                  TextField(
+                    controller: portController,
+                    decoration: InputDecoration(labelText: 'Server port'),
+                    keyboardType: TextInputType.number,
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    setState(() {
+                      inferenceOn = WhereInference.device;
+                    });
+                    Navigator.pop(context);
+                  },
+                  child: Text('Cancel'),
+                ),
+                TextButton(
+                  onPressed: () async {
+                    var ip = ipController.text;
+                    var port = int.parse(portController.text);
+                    setDialogState(() {
+                      socketConnecting = true;
+                    });
+                    await Socket.connect(ip, port,
+                            timeout: Duration(seconds: 5))
+                        .then((value) {
+                      socket = value;
+                      listenSocket();
+                      socketConnected = true;
+
+                      prefs.setString('ip', ip);
+                      prefs.setString('port', port.toString());
+                    }).catchError((e) {
+                      print('Socket connect error $e');
+                      setState(() {
+                        inferenceOn = WhereInference.device;
+                      });
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                        content: Text('Can\'t connect to server'),
+                      ));
+                    });
+                    Navigator.pop(context);
+                  },
+                  child: Text('Connect'),
                 ),
               ],
-            ),
-    );
-  }
-}
-
-class LogPage extends StatefulWidget {
-  const LogPage({Key? key}) : super(key: key);
-
-  @override
-  _LogPageState createState() => _LogPageState();
-}
-
-class _LogPageState extends State<LogPage> {
-  LogLevel dropdownValue = LogLevel.ALL;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: [
-            DropdownButton(
-              value: dropdownValue,
-              onChanged: (LogLevel? newValue) {
-                if (newValue != dropdownValue) {
-                  setState(() {
-                    dropdownValue = newValue!;
-                  });
-                }
-              },
-              items: [LogLevel.ALL, LogLevel.INFO, LogLevel.ERROR, LogLevel.WARNING]
-                  .map((LogLevel value) {
-                return DropdownMenuItem(
-                  value: value,
-                  child: Text(value.toString()),
-                );
-              }).toList(),
-            ),
-            ElevatedButton(
-              child: Text('Clear Logs'),
-              onPressed: () {
-                setState(() {
-                  FLog.clearLogs();
-                });
-              },
-            ),
-          ],
-        ),
-        Expanded(
-          child: FutureBuilder(
-              future: FLog.getAllLogsByFilter(
-                  logLevels: dropdownValue == LogLevel.ALL
-                      ? []
-                      : [dropdownValue.toString()]),
-              builder:
-                  (BuildContext context, AsyncSnapshot<List<Log>> snapshot) {
-                if (snapshot.connectionState == ConnectionState.done) {
-                  return ListView.builder(
-                      itemCount: snapshot.data!.length,
-                      itemBuilder: (BuildContext context, int index) {
-                        return Padding(
-                          padding: const EdgeInsets.all(5.0),
-                          child: Text(
-                            "${snapshot.data![index].logLevel} ${snapshot.data![index].className} ${snapshot.data![index].methodName} ${snapshot.data![index].text!} ${snapshot.data![index].timestamp}",
-                            style: TextStyle(fontSize: 18),
-                          ),
-                        );
-                      });
-                } else {
-                  return Container();
-                }
-              }),
-        ),
-      ],
-    );
+            );
+          });
+        });
   }
 }
