@@ -4,12 +4,14 @@ import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
 
+import '../controllers/PredictionController.dart';
+import '../models/PredictionModel.dart';
 import '../main.dart';
+import '../widgets/CameraPlain.dart';
+import 'PredictionScreen.dart';
 
 class CameraScreen extends StatefulWidget {
-  const CameraScreen({required this.onShowPrediction, Key? key}) : super(key: key);
-
-  final void Function(XFile, Map) onShowPrediction;
+  const CameraScreen({Key? key}) : super(key: key);
 
   @override
   State<CameraScreen> createState() => _CameraScreenState();
@@ -54,25 +56,16 @@ class _CameraScreenState extends State<CameraScreen>
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      alignment: Alignment.bottomCenter,
-      children: [
-        CameraPreview(_controller!),
-        Container(
-            color: Colors.black45,
-            width: MediaQuery.of(context).size.width,
-            child: Padding(
-              padding: const EdgeInsets.all(8.0),
-              child: ElevatedButton(
-                child: null,
-                onPressed: takePicture,
-                style: ElevatedButton.styleFrom(
-                    primary: Colors.white,
-                    fixedSize: const Size(50, 50),
-                    shape: const CircleBorder()),
-              ),
-            ))
-      ],
+    return Center(
+      child: Container(
+        child: Stack(
+          alignment: Alignment.bottomCenter,
+          children: [
+            CameraPreview(_controller!),
+            CameraPlain(onTakePicture: takePicture),
+          ],
+        ),
+      ),
     );
   }
 
@@ -118,25 +111,15 @@ class _CameraScreenState extends State<CameraScreen>
     }
 
     XFile file = await _controller!.takePicture();
+    var image = await file.readAsBytes();
 
-    file.readAsBytes().then((value) {
-      print(value.length);
-      print(base64.encode(value).length);
-    });
+    var prediction = await PredictionController.predict(image);
 
-    try {
-      var response = await Dio().post(
-        'http://193.2.231.95:5000/predict',
-        data: {
-          'image': base64.encode(await file.readAsBytes()),
-        },
-      );
-
-      var prediction = json.decode(response.data);
-
-      widget.onShowPrediction(file, prediction);
-    } catch (e) {
-      print(e);
-    }
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+          builder: (context) =>
+              PredictionScreen(image: file, prediction: prediction)),
+    );
   }
 }

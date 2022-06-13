@@ -1,17 +1,40 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
+import 'package:flutter/services.dart';
 
+import 'models/PredictionModel.dart';
 import 'screens/CameraScreen.dart';
-import 'screens/ResultScreen.dart';
+import 'screens/DemoScreen.dart';
+import 'screens/PredictionScreen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 List<CameraDescription> cameras = <CameraDescription>[];
+late SharedPreferences prefs;
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   cameras = await availableCameras();
+  prefs = await SharedPreferences.getInstance();
+
+  await initImages();
 
   runApp(MyApp());
+}
+
+Future initImages() async {
+  final manifestContent = await rootBundle.loadString('AssetManifest.json');
+
+  final Map<String, dynamic> manifestMap = json.decode(manifestContent);
+
+  var imagePathes =
+      manifestMap.keys.where((String key) => key.contains('images/')).toList();
+
+  imagePathes = List.generate(
+      imagePathes.length, (index) => imagePathes[index].split('/').last);
+
+  await prefs.setStringList('testImagesList', imagePathes);
 }
 
 class MyApp extends StatelessWidget {
@@ -43,8 +66,10 @@ class MyHomePage extends StatefulWidget {
 
 class _MyHomePageState extends State<MyHomePage> {
   late XFile image;
-  late Map result;
-  bool showResult = false;
+  late PredictionModel prediction;
+  bool doShowPrediction = false;
+
+  var isDemo = false;
 
   @override
   Widget build(BuildContext context) {
@@ -55,23 +80,25 @@ class _MyHomePageState extends State<MyHomePage> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         title: Text("Result Car Damage"),
+        actions: [
+          PopupMenuButton(
+            itemBuilder: (context) => [
+              CheckedPopupMenuItem(
+                  value: 0, checked: isDemo, child: Text('Demo'))
+            ],
+            onSelected: (value) {
+              if (value == 0) {
+                setState(() {
+                  isDemo = !isDemo;
+                });
+              }
+            },
+          )
+        ],
       ),
       body: Center(
-        child: showResult
-            ? ResultScreen(image: image, result: result)
-            : CameraScreen(
-                onShowPrediction: showPrediction,
-              ),
+        child: isDemo ? DemoScreen() : CameraScreen(),
       ),
     );
-  }
-
-  showPrediction(XFile image, Map prediction) {
-    print(prediction['result'][0][0]);
-    setState(() {
-      image = image;
-      result = prediction;
-      showResult = true;
-    });
   }
 }
