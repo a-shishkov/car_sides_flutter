@@ -3,13 +3,15 @@ import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 
+import '../main.dart';
 import '../models/PredictionModel.dart';
 
 class PredictionController {
-  static predict(List<int> image) async {
+  static Future predict(List<int> image) async {
     try {
+      var serverIP = prefs.getString('serverIP');
       var response = await Dio().post(
-        'http://193.2.231.115:5000/predict',
+        'http://$serverIP:5000/predict',
         data: {
           'image': base64.encode(image),
         },
@@ -19,7 +21,7 @@ class PredictionController {
 
       return PredictionModel.fromMap(predictionMap);
     } catch (e) {
-      print(e);
+      return Future.error(e);
     }
   }
 }

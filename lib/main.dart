@@ -10,6 +10,8 @@ import 'screens/DemoScreen.dart';
 import 'screens/PredictionScreen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'screens/SettingsScreen.dart';
+
 List<CameraDescription> cameras = <CameraDescription>[];
 late SharedPreferences prefs;
 
@@ -69,7 +71,7 @@ class _MyHomePageState extends State<MyHomePage> {
   late PredictionModel prediction;
   bool doShowPrediction = false;
 
-  var isDemo = false;
+  var isDemo = prefs.getBool("isDemo") ?? false;
 
   @override
   Widget build(BuildContext context) {
@@ -84,20 +86,32 @@ class _MyHomePageState extends State<MyHomePage> {
           PopupMenuButton(
             itemBuilder: (context) => [
               CheckedPopupMenuItem(
-                  value: 0, checked: isDemo, child: Text('Demo'))
+                  value: 0, checked: isDemo, child: Text('Demo')),
+              PopupMenuItem(value: 1, child: Text('Settings')),
             ],
             onSelected: (value) {
-              if (value == 0) {
-                setState(() {
-                  isDemo = !isDemo;
-                });
+              switch (value) {
+                case 0:
+                  setState(() {
+                    isDemo = !isDemo;
+                    prefs.setBool("isDemo", isDemo);
+                  });
+                  break;
+                case 1:
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => SettingsScreen()),
+                  );
+                  break;
               }
             },
           )
         ],
       ),
-      body: Center(
-        child: isDemo ? DemoScreen() : CameraScreen(),
+      body: Container(
+        child: Center(
+          child: isDemo ? DemoScreen() : CameraScreen(),
+        ),
       ),
     );
   }
