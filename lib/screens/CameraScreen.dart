@@ -56,16 +56,12 @@ class _CameraScreenState extends State<CameraScreen>
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Container(
-        child: Stack(
-          alignment: Alignment.bottomCenter,
-          children: [
-            CameraPreview(_controller!),
-            CameraPlain(onTakePicture: takePicture),
-          ],
-        ),
-      ),
+    return Stack(
+      alignment: Alignment.bottomCenter,
+      children: [
+        CameraPreview(_controller!),
+        CameraPlain(onTakePicture: takePicture),
+      ],
     );
   }
 
@@ -74,8 +70,9 @@ class _CameraScreenState extends State<CameraScreen>
       await _controller!.dispose();
     }
 
-    final CameraController cameraController =
-        CameraController(cameraDescription, ResolutionPreset.medium);
+    final CameraController cameraController = CameraController(
+        cameraDescription, ResolutionPreset.high,
+        enableAudio: false);
 
     _controller = cameraController;
 
@@ -113,13 +110,13 @@ class _CameraScreenState extends State<CameraScreen>
     XFile file = await _controller!.takePicture();
     var image = await file.readAsBytes();
 
-    var prediction = await PredictionController.predict(image);
-
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-          builder: (context) =>
-              PredictionScreen(image: file, prediction: prediction)),
-    );
+    PredictionController.predict(image)
+        .then((value) => Navigator.push(
+              context,
+              MaterialPageRoute(
+                  builder: (context) =>
+                      PredictionScreen(image: file, prediction: value)),
+            ))
+        .onError((error, stackTrace) => print("Error: $error"));
   }
 }

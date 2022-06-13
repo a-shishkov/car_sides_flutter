@@ -68,13 +68,14 @@ class _DemoScreenState extends State<DemoScreen> {
     final byteData = await rootBundle.load(path);
 
     var image = Uint8List.view(byteData.buffer);
-    var prediction = await PredictionController.predict(image);
 
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-          builder: (context) => PredictionScreen(
-              imagePath: path, prediction: prediction, isAsset: true)),
-    );
+    PredictionController.predict(image)
+        .then((value) => Navigator.push(
+              context,
+              MaterialPageRoute(
+                  builder: (context) => PredictionScreen(
+                      imagePath: path, prediction: value, isAsset: true)),
+            ))
+        .onError((error, stackTrace) => print("Error: $error"));
   }
 }
