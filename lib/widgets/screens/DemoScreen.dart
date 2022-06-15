@@ -71,7 +71,7 @@ class _DemoScreenState extends State<DemoScreen> {
     var image_data = Uint8List.view(byteData.buffer);
     var image = image_package.decodeImage(image_data)!;
 
-    await Navigator.push(
+    var annotations = await Navigator.push(
         context,
         MaterialPageRoute(
             builder: (context) => AnnotationScreen(
@@ -79,7 +79,7 @@ class _DemoScreenState extends State<DemoScreen> {
                 isAsset: true,
                 size: Size(image.width.toDouble(), image.height.toDouble()))));
 
-    PredictionController.predict(image_data)
+    PredictionController.predict(image_data, annotations: annotations)
         .then((value) => Navigator.push(
               context,
               MaterialPageRoute(
