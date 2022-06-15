@@ -17,6 +17,7 @@ class PredictionModel {
         this.height = map['height'],
         this.boxes = map['damage']['boxes'],
         this.masks = map['damage']['masks'];
+// Code below is for packbits data
 /*         {
     var bool_instances = [];
     for (var instances in map['damage']['masks']) {
@@ -37,6 +38,7 @@ class PredictionModel {
     this.masks = bool_instances;
   } */
 
+  // Convert all masks to a list of ui.Image
   getMaskImages() async {
     var maskImages = [];
     for (var class_masks in masks) {
@@ -49,6 +51,7 @@ class PredictionModel {
     return maskImages;
   }
 
+  // Convert mask list to ui.Image
   getMaskImage(mask,
       {color = const ui.Color.fromARGB(100, 255, 255, 255)}) async {
     List<int> pixels = [];
@@ -75,6 +78,7 @@ class PredictionModel {
     return uiImage.future;
   }
 
+  // Function to filter instances by threshold and convert masks from list to ui.Image
   Future<Map> paint(
       {color = const ui.Color.fromARGB(100, 255, 255, 255),
       threshold = 0.3}) async {

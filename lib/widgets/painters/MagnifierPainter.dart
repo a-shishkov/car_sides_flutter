@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+// Crosshair painter
 class MagnifierPainter extends CustomPainter {
   final double strokeWidth;
   final Color color;

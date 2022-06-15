@@ -29,6 +29,7 @@ class _DemoScreenState extends State<DemoScreen> {
     return Stack(alignment: Alignment.bottomCenter, children: [
       Container(
         child: Stack(alignment: Alignment.center, children: [
+          // Swipeable gallery of all asset images
           PhotoViewGallery.builder(
               pageController: pageController,
               onPageChanged: imagePageChanged,
@@ -62,6 +63,7 @@ class _DemoScreenState extends State<DemoScreen> {
     selectedImage = index;
   }
 
+  // Send selected image to server
   void takePicture() async {
     var path = 'assets/images/${imageItems[selectedImage]}';
     final byteData = await rootBundle.load(path);

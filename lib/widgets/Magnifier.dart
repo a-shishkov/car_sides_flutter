@@ -5,6 +5,7 @@ import 'painters/MagnifierPainter.dart';
 enum MagnifierType { center, top, bottom }
 enum _SidedMagnifierType { center, topLeft, topRight, bottomLeft, bottomRight }
 
+// Magnifier scales area under user cursor
 class Magnifier extends StatefulWidget {
   final Widget child;
   final Offset? cursor;
@@ -55,58 +56,6 @@ class _MagnifierState extends State<Magnifier> {
     if (crosshairPosition.dx > _childSize.width) return false;
     if (crosshairPosition.dy > _childSize.height) return false;
     return true;
-  }
-
-  Widget get _body {
-    double? left;
-    double? right;
-    double? top;
-    double? bottom;
-    switch (_type) {
-      case _SidedMagnifierType.center:
-        left = crosshairPosition.dx - _size / 2;
-        top = crosshairPosition.dy - _size / 2;
-        break;
-      case _SidedMagnifierType.topLeft:
-        left = 0;
-        top = 0;
-        break;
-      case _SidedMagnifierType.topRight:
-        right = 0;
-        top = 0;
-        break;
-      case _SidedMagnifierType.bottomLeft:
-        left = 0;
-        bottom = 0;
-        break;
-      case _SidedMagnifierType.bottomRight:
-        right = 0;
-        bottom = 0;
-        break;
-    }
-    return Stack(
-      key: _key,
-      alignment: Alignment.center,
-      children: [
-        widget.child,
-        if (widget.enabled && _cursorInWidget)
-          Positioned(
-            left: left,
-            right: right,
-            top: top,
-            bottom: bottom,
-            child: ClipOval(
-              child: BackdropFilter(
-                filter: ImageFilter.matrix(_matrix.storage),
-                child: CustomPaint(
-                  painter: widget.painter,
-                  size: Size(_size, _size),
-                ),
-              ),
-            ),
-          ),
-      ],
-    );
   }
 
   @override
@@ -160,7 +109,57 @@ class _MagnifierState extends State<Magnifier> {
 
   @override
   Widget build(BuildContext context) {
-    return _body;
+    double? left;
+    double? right;
+    double? top;
+    double? bottom;
+    // Magnifier position
+    switch (_type) {
+      case _SidedMagnifierType.center:
+        left = crosshairPosition.dx - _size / 2;
+        top = crosshairPosition.dy - _size / 2;
+        break;
+      case _SidedMagnifierType.topLeft:
+        left = 0;
+        top = 0;
+        break;
+      case _SidedMagnifierType.topRight:
+        right = 0;
+        top = 0;
+        break;
+      case _SidedMagnifierType.bottomLeft:
+        left = 0;
+        bottom = 0;
+        break;
+      case _SidedMagnifierType.bottomRight:
+        right = 0;
+        bottom = 0;
+        break;
+    }
+    return Stack(
+      key: _key,
+      alignment: Alignment.center,
+      children: [
+        widget.child,
+        if (widget.enabled && _cursorInWidget)
+          Positioned(
+            left: left,
+            right: right,
+            top: top,
+            bottom: bottom,
+            child: ClipOval(
+              child: BackdropFilter(
+                filter: ImageFilter.matrix(_matrix.storage),
+                child: CustomPaint(
+                  painter: widget.painter,
+                  size: Size(_size, _size),
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+    ;
   }
 
   void _calculateMatrix() {

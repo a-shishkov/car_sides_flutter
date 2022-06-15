@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 
+// Small plain with button
 class CameraPlain extends StatelessWidget {
   CameraPlain({this.onTakePicture, Key? key}) : super(key: key);
 
-  void Function()? onTakePicture;
+  final void Function()? onTakePicture;
 
   @override
   Widget build(BuildContext context) {

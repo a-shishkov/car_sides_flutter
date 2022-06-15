@@ -13,19 +13,20 @@ class PolygonPainter extends CustomPainter {
   double pointRadius;
   double get _circleRadius => pointRadius - _pointStrokeWidth;
 
+  Paint pointPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1;
+
+  Paint polygonPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeJoin = StrokeJoin.round
+    ..strokeWidth = 1;
+
   PolygonPainter(this.annotations, this.currentAnnotation, this.selectedPoint,
       this.pointRadius);
 
   @override
   void paint(Canvas canvas, Size size) {
-    Paint pointPaint = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = _pointStrokeWidth;
-
-    Paint polygonPaint = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeJoin = StrokeJoin.round
-      ..strokeWidth = 1;
     // Paint fillPaint = Paint()..color = color.withOpacity(0.15);
 
     for (var i = 0; i < annotations.length; i++) {

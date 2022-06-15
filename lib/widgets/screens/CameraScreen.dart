@@ -19,6 +19,7 @@ class _CameraScreenState extends State<CameraScreen>
     with WidgetsBindingObserver {
   CameraController? _controller;
 
+  // Handle camera lifecycle
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     print("didChangeAppLifecycleState overlay");
@@ -37,16 +38,13 @@ class _CameraScreenState extends State<CameraScreen>
 
   @override
   void initState() {
-    print("initState overlay");
     WidgetsBinding.instance!.addObserver(this);
-
     onNewCameraSelected(cameras[0]);
     super.initState();
   }
 
   @override
   void dispose() {
-    print("dispose overlay");
     WidgetsBinding.instance!.removeObserver(this);
     _controller?.dispose();
     super.dispose();
@@ -100,6 +98,7 @@ class _CameraScreenState extends State<CameraScreen>
     }
   }
 
+  // Send taken image to server and get prediction
   void takePicture() async {
     if (_controller!.value.isTakingPicture) {
       return;
@@ -110,14 +109,14 @@ class _CameraScreenState extends State<CameraScreen>
 
     var image = image_package.decodeImage(image_data)!;
 
-    await Navigator.push(
+    var annotations = await Navigator.push(
         context,
         MaterialPageRoute(
             builder: (context) => AnnotationScreen(
                 image: file,
                 size: Size(image.width.toDouble(), image.height.toDouble()))));
 
-    PredictionController.predict(image_data)
+    PredictionController.predict(image_data, annotations: annotations)
         .then((value) => Navigator.push(
               context,
               MaterialPageRoute(

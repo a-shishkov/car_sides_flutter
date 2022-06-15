@@ -3,6 +3,7 @@ import 'dart:ui' as ui;
 
 import '../../models/PredictionModel.dart';
 
+// Used to display bboxes masks and captions from server on image
 class PredictionPainter extends CustomPainter {
   PredictionPainter(this.instances);
 

@@ -2,7 +2,6 @@ import 'PolygonModel.dart';
 import 'enums/ModelType.dart';
 
 class Annotation {
-  // String name;
   ModelType superCategory;
   int categoryId;
   Polygon polygon;

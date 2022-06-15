@@ -12,6 +12,8 @@ import '../../models/enums/ModelType.dart';
 import '../Magnifier.dart';
 import '../painters/PolygonPainter.dart';
 
+// AnnotationScreen is a widget to create annotations directly in flutter and
+// send them to server for storing
 class AnnotationScreen extends StatefulWidget {
   const AnnotationScreen({
     this.image,
@@ -99,6 +101,7 @@ class _AnnotationScreenState extends State<AnnotationScreen> {
               icon: Icon(Icons.help))
         ],
       ),
+      // Use magnifier as parent
       body: Magnifier(
         cursor: _globalCursor,
         enabled: magnifierEnabled,
@@ -153,6 +156,7 @@ class _AnnotationScreenState extends State<AnnotationScreen> {
     );
   }
 
+  // Check if cursor is on point in raduis
   Position? get touchIndex {
     if (_cursor != null) {
       for (var i = 0; i < annotations.length; i++) {
@@ -169,6 +173,7 @@ class _AnnotationScreenState extends State<AnnotationScreen> {
     return null;
   }
 
+  // Check if curser is in polygon
   int? get touchPolygon {
     if (_cursor != null) {
       for (var i = 0; i < annotations.length; i++) {
@@ -182,7 +187,6 @@ class _AnnotationScreenState extends State<AnnotationScreen> {
   }
 
   void onDoubleTapDown(TapDownDetails details) {
-    print('onDoubleTapDown');
     setState(() {
       _cursor = details.localPosition;
       _globalCursor = details.globalPosition;
@@ -190,9 +194,9 @@ class _AnnotationScreenState extends State<AnnotationScreen> {
   }
 
   void onDoubleTap() {
-    print('doubleTap');
     setState(() {
       var index = touchIndex;
+      // Delete point under cursor
       if (index != null && index.row == _currentAnnotationIndex) {
         annotations[index.row].polygon.removeAt(index.column);
         if (annotations[index.row].polygon.length <= 0) {
@@ -209,6 +213,7 @@ class _AnnotationScreenState extends State<AnnotationScreen> {
         return;
       }
 
+      // Change active polygon
       var polygonIndex = touchPolygon;
       if (polygonIndex != null) {
         setState(() {
@@ -219,15 +224,15 @@ class _AnnotationScreenState extends State<AnnotationScreen> {
   }
 
   void onLongPressDown(LongPressDownDetails details) {
-    print('onLongPressDown');
     setState(() {
       _cursor = details.localPosition;
       _globalCursor = details.globalPosition;
     });
   }
 
+  // onLognPress add new point
   void onLongPressStart(LongPressStartDetails details) async {
-    print('longPress');
+    // if no annotation(polygon) created ask user to create new
     if (_currentAnnotationIndex == -1) {
       if (!await addNewAnnotationDialog()) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -241,6 +246,7 @@ class _AnnotationScreenState extends State<AnnotationScreen> {
       _cursor = details.localPosition;
       _globalCursor = details.globalPosition;
       _selectedPoint = touchIndex;
+      // If cursor is not on the point then create new
       if (_selectedPoint == null) {
         _selectedPoint = Position(
             _currentAnnotationIndex, _currentAnnotation.polygon.length);
@@ -249,6 +255,7 @@ class _AnnotationScreenState extends State<AnnotationScreen> {
     });
   }
 
+  // Update the location of point
   void onLongPressMoveUpdate(LongPressMoveUpdateDetails details) {
     setState(() {
       if (_selectedPoint != null) {
@@ -260,14 +267,15 @@ class _AnnotationScreenState extends State<AnnotationScreen> {
     });
   }
 
+  // Hide magnifier and unselect point
   void onLongPressUp() {
-    print('long press up');
     setState(() {
       magnifierEnabled = false;
       _selectedPoint = null;
     });
   }
 
+  // Add new polygon
   void onAddInstance() {
     if (_currentAnnotation.polygon.length < 3) {
       ScaffoldMessenger.of(context)
@@ -277,6 +285,7 @@ class _AnnotationScreenState extends State<AnnotationScreen> {
     addNewAnnotationDialog();
   }
 
+  // Ask user for confirmation and return list of points
   void onConfirm() {
     if (annotations.length <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -301,10 +310,12 @@ class _AnnotationScreenState extends State<AnnotationScreen> {
             .toList());
   }
 
+  // Return null
   void onCancel() {
     Navigator.pop(context);
   }
 
+  // TODO: something wrong with categories
   Future<bool> addNewAnnotationDialog() async {
     int categoryId = 0;
 

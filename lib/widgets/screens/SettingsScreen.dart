@@ -30,6 +30,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final Color _tileColor = Theme.of(context).colorScheme.surface;
+
     return Scaffold(
       appBar: AppBar(
         title: Text("Settings"),
@@ -48,7 +50,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   decoration: InputDecoration.collapsed(hintText: "Enter here"),
                 ),
               ),
-              tileColor: Theme.of(context).colorScheme.surface,
+              tileColor: _tileColor,
             ),
           ]).toList(),
         ),

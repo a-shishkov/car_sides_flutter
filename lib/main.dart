@@ -24,6 +24,7 @@ Future<void> main() async {
   runApp(MyApp());
 }
 
+// Get list of all asset image paths
 Future initImages() async {
   final manifestContent = await rootBundle.loadString('AssetManifest.json');
 
@@ -93,8 +94,8 @@ class _MyHomePageState extends State<MyHomePage> {
                 case 0:
                   setState(() {
                     isDemo = !isDemo;
-                    prefs.setBool("isDemo", isDemo);
                   });
+                  prefs.setBool("isDemo", isDemo);
                   break;
                 case 1:
                   Navigator.push(
