@@ -1,16 +1,13 @@
-import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:photo_view/photo_view.dart';
 import 'package:photo_view/photo_view_gallery.dart';
 
-import '../controllers/PredictionController.dart';
-import '../models/PredictionModel.dart';
-import '../main.dart';
-import '../widgets/CameraPlain.dart';
+import '../../controllers/PredictionController.dart';
+import '../../main.dart';
+import '../CameraPlain.dart';
 import 'PredictionScreen.dart';
 
 class DemoScreen extends StatefulWidget {

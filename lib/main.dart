@@ -5,12 +5,11 @@ import 'package:camera/camera.dart';
 import 'package:flutter/services.dart';
 
 import 'models/PredictionModel.dart';
-import 'screens/CameraScreen.dart';
-import 'screens/DemoScreen.dart';
-import 'screens/PredictionScreen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'screens/SettingsScreen.dart';
+import 'widgets/screens/CameraScreen.dart';
+import 'widgets/screens/DemoScreen.dart';
+import 'widgets/screens/SettingsScreen.dart';
 
 List<CameraDescription> cameras = <CameraDescription>[];
 late SharedPreferences prefs;

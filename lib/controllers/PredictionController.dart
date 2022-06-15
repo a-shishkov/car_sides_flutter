@@ -7,6 +7,8 @@ import '../main.dart';
 import '../models/PredictionModel.dart';
 
 class PredictionController {
+
+
   static Future predict(List<int> image) async {
     try {
       var serverIP = prefs.getString('serverIP');

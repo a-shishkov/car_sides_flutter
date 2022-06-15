@@ -9,6 +9,9 @@ class PredictionModel {
   final int width;
   final int height;
 
+  static get classes =>
+      ['headlamp', 'rear_bumper', 'door', 'hood', 'front_bumper'];
+
   PredictionModel.fromMap(Map map)
       : this.width = map['width'],
         this.height = map['height'],
@@ -47,10 +50,15 @@ class PredictionModel {
   }
 
   getMaskImage(mask,
-      {color = const ui.Color.fromARGB(178, 255, 255, 255)}) async {
+      {color = const ui.Color.fromARGB(100, 255, 255, 255)}) async {
     List<int> pixels = [];
     for (var pixel in mask) {
-      List<int> pixelColor = [color.red, color.green, color.blue, color.alpha];
+      List<int> pixelColor = [
+        (color.red * color.opacity).toInt(),
+        (color.green * color.opacity).toInt(),
+        (color.blue * color.opacity).toInt(),
+        0
+      ];
       List<int> transparentColor = [0, 0, 0, 0];
       if (pixel)
         pixels.addAll(pixelColor);
@@ -67,27 +75,24 @@ class PredictionModel {
     return uiImage.future;
   }
 
-  Future<Map> paint({threshold = 0.3}) async {
-    var passed_boxes = [];
-    var passed_masks = [];
+  Future<Map> paint(
+      {color = const ui.Color.fromARGB(100, 255, 255, 255),
+      threshold = 0.3}) async {
+    var passed_instances = [];
     for (var class_i = 0; class_i < boxes.length; class_i++) {
+      var class_instances = [];
       for (var instance_i = 0;
           instance_i < boxes[class_i].length;
           instance_i++) {
         var box = boxes[class_i][instance_i];
         if (box[4] >= threshold) {
           var mask = masks[class_i][instance_i];
-          passed_boxes.add(box);
-          passed_masks.add(await getMaskImage(mask));
+          class_instances.add([box, await getMaskImage(mask, color: color)]);
         }
       }
+      passed_instances.add(class_instances);
     }
 
-    return {
-      "width": width,
-      "height": height,
-      "boxes": passed_boxes,
-      "masks": passed_masks
-    };
+    return {"width": width, "height": height, "instances": passed_instances};
   }
 }

@@ -1,13 +1,9 @@
-import 'dart:convert';
-
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
-import 'package:dio/dio.dart';
 
-import '../controllers/PredictionController.dart';
-import '../models/PredictionModel.dart';
-import '../main.dart';
-import '../widgets/CameraPlain.dart';
+import '../../controllers/PredictionController.dart';
+import '../../main.dart';
+import '../CameraPlain.dart';
 import 'PredictionScreen.dart';
 
 class CameraScreen extends StatefulWidget {
