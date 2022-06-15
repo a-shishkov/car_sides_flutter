@@ -1,9 +1,11 @@
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
+import 'package:image/image.dart' as image_package;
 
 import '../../controllers/PredictionController.dart';
 import '../../main.dart';
 import '../CameraPlain.dart';
+import 'AnnotationScreen.dart';
 import 'PredictionScreen.dart';
 
 class CameraScreen extends StatefulWidget {
@@ -104,9 +106,18 @@ class _CameraScreenState extends State<CameraScreen>
     }
 
     XFile file = await _controller!.takePicture();
-    var image = await file.readAsBytes();
+    var image_data = await file.readAsBytes();
 
-    PredictionController.predict(image)
+    var image = image_package.decodeImage(image_data)!;
+
+    await Navigator.push(
+        context,
+        MaterialPageRoute(
+            builder: (context) => AnnotationScreen(
+                image: file,
+                size: Size(image.width.toDouble(), image.height.toDouble()))));
+
+    PredictionController.predict(image_data)
         .then((value) => Navigator.push(
               context,
               MaterialPageRoute(

@@ -11,8 +11,8 @@ class PredictionScreen extends StatefulWidget {
   PredictionScreen(
       {this.image,
       this.imagePath,
+            this.isAsset = false,
       required this.prediction,
-      this.isAsset = false,
       Key? key})
       : super(key: key) {
     assert(image != null || imagePath != null);
@@ -20,8 +20,8 @@ class PredictionScreen extends StatefulWidget {
 
   final XFile? image;
   final String? imagePath;
-  final PredictionModel prediction;
   final bool isAsset;
+  final PredictionModel prediction;
 
   @override
   State<PredictionScreen> createState() => _PredictionScreenState();

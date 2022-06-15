@@ -4,10 +4,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:photo_view/photo_view.dart';
 import 'package:photo_view/photo_view_gallery.dart';
+import 'package:image/image.dart' as image_package;
 
 import '../../controllers/PredictionController.dart';
 import '../../main.dart';
 import '../CameraPlain.dart';
+import 'AnnotationScreen.dart';
 import 'PredictionScreen.dart';
 
 class DemoScreen extends StatefulWidget {
@@ -64,9 +66,18 @@ class _DemoScreenState extends State<DemoScreen> {
     var path = 'assets/images/${imageItems[selectedImage]}';
     final byteData = await rootBundle.load(path);
 
-    var image = Uint8List.view(byteData.buffer);
+    var image_data = Uint8List.view(byteData.buffer);
+    var image = image_package.decodeImage(image_data)!;
 
-    PredictionController.predict(image)
+    await Navigator.push(
+        context,
+        MaterialPageRoute(
+            builder: (context) => AnnotationScreen(
+                imagePath: path,
+                isAsset: true,
+                size: Size(image.width.toDouble(), image.height.toDouble()))));
+
+    PredictionController.predict(image_data)
         .then((value) => Navigator.push(
               context,
               MaterialPageRoute(

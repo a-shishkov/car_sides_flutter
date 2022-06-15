@@ -98,9 +98,9 @@ class _MyHomePageState extends State<MyHomePage> {
                   break;
                 case 1:
                   Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (context) => SettingsScreen()),
-                  );
+                      context,
+                      MaterialPageRoute(
+                          builder: (context) => SettingsScreen()));
                   break;
               }
             },
