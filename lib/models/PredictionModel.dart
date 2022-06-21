@@ -17,7 +17,7 @@ class PredictionModel {
         this.height = map['height'],
         this.boxes = map['damage']['boxes'],
         this.masks = map['damage']['masks'];
-// Code below is for packbits data
+// Code below is for np.packbits data
 /*         {
     var bool_instances = [];
     for (var instances in map['damage']['masks']) {

@@ -47,17 +47,20 @@ class Polygon {
   Offset operator [](int i) => points[i];
   void operator []=(int i, Offset value) => points[i] = value;
 
+  // Returns true if the point p lies inside the polygon
+  // https://www.geeksforgeeks.org/how-to-check-if-a-given-point-lies-inside-a-polygon/
   bool isPointInside(Offset p) {
     var n = length;
 
+    // There must be at least 3 vertices in polygon
     if (n < 3) {
       return false;
     }
 
+    // Check if point is inside of polygonMin and polygonMax
     if (p.dx < polygonMin.dx || p.dx > polygonMax.dx) {
       return false;
     }
-
     if (p.dy < polygonMin.dy || p.dy > polygonMax.dy) {
       return false;
     }
@@ -70,6 +73,8 @@ class Polygon {
     do {
       var next = (i + 1) % n;
 
+      // Check if the line segment from 'p' to 'extreme' intersects
+      // with the line segment from 'points[i]' to 'points[next]'
       if (_doIntersect(points[i], points[next], p, extreme)) {
         if (_orientation(points[i], p, points[next]) == 0) {
           return _onSegment(points[i], p, points[next]);
