@@ -5,21 +5,21 @@ import '../../models/PredictionModel.dart';
 
 // Used to display bboxes masks and captions from server on image
 class PredictionPainter extends CustomPainter {
-  PredictionPainter(this.instances);
+  PredictionPainter(this.detections);
 
-  final List instances;
+  final List detections;
 
   @override
   void paint(Canvas canvas, Size size) {
-    for (var class_i = 0; class_i < instances.length; class_i++) {
-      for (var instance in instances[class_i]) {
-        var box = instance[0];
-        var mask = instance[1];
+    for (var i = 0; i < detections.length; i++) {
+      var score = detections[i][0];
+      var _class = detections[i][1];
+      var box = detections[i][2];
+      var mask = detections[i][3];
 
-        drawBox(canvas, box);
-        canvas.drawImage(mask, Offset.zero, Paint());
-        drawCaptions(canvas, box, class_i);
-      }
+      drawBox(canvas, box);
+      canvas.drawImage(mask, Offset.zero, Paint());
+      drawCaptions(canvas, score, _class, box);
     }
   }
 
@@ -29,8 +29,7 @@ class PredictionPainter extends CustomPainter {
   }
 
   drawBox(Canvas canvas, List box) {
-    var left = box[0], top = box[1], right = box[2], bottom = box[3];
-    var rect = Rect.fromLTRB(left, top, right, bottom);
+    var rect = Rect.fromLTRB(box[1], box[0], box[3], box[2]);
     canvas.drawRect(
         rect,
         Paint()
@@ -39,13 +38,12 @@ class PredictionPainter extends CustomPainter {
           ..strokeWidth = 2);
   }
 
-  void drawCaptions(Canvas canvas, List box, int class_i) {
-    var rect = Rect.fromLTRB(box[0], box[1], box[2], box[3]);
-    var className = PredictionModel.classes[class_i];
-    var score = box[4].toStringAsFixed(2);
+  void drawCaptions(Canvas canvas, double score, int _class, List box) {
+    var rect = Rect.fromLTRB(box[1], box[0], box[3], box[2]);
+    var className = PredictionModel.class_names[_class];
 
-    var builder = ui.ParagraphBuilder(ui.ParagraphStyle(fontSize: 50));
-    builder.addText('$className $score');
+    var builder = ui.ParagraphBuilder(ui.ParagraphStyle(fontSize: 20));
+    builder.addText('$className ${score.toStringAsFixed(2)}');
     canvas.drawParagraph(
         builder.build()..layout(ui.ParagraphConstraints(width: 200)),
         rect.topLeft);

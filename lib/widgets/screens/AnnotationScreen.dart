@@ -8,7 +8,6 @@ import 'package:flutter_app/models/PredictionModel.dart';
 import '../../models/AnnotationModel.dart';
 import '../../models/PolygonModel.dart';
 import '../../models/PositionModel.dart';
-import '../../models/enums/ModelType.dart';
 import '../Magnifier.dart';
 import '../painters/PolygonPainter.dart';
 
@@ -69,9 +68,7 @@ class _AnnotationScreenState extends State<AnnotationScreen> {
 
   Position? _selectedPoint;
 
-  ModelType modelType = ModelType.parts;
-
-  List<String> get classNames => PredictionModel.classes;
+  List<String> get classNames => PredictionModel.class_names;
 
   Annotation get _currentAnnotation => annotations[_currentAnnotationIndex];
   int _currentAnnotationIndex = -1;
@@ -305,8 +302,8 @@ class _AnnotationScreenState extends State<AnnotationScreen> {
     Navigator.pop(
         context,
         annotations
-            .map((e) => Annotation(
-                e.superCategory, e.categoryId, e.scalePolygon(scaleX, scaleY)))
+            .map(
+                (e) => Annotation(e.categoryId, e.scalePolygon(scaleX, scaleY)))
             .toList());
   }
 
@@ -315,7 +312,6 @@ class _AnnotationScreenState extends State<AnnotationScreen> {
     Navigator.pop(context);
   }
 
-  // TODO: something wrong with categories
   Future<bool> addNewAnnotationDialog() async {
     int categoryId = 0;
 
@@ -325,70 +321,26 @@ class _AnnotationScreenState extends State<AnnotationScreen> {
           return StatefulBuilder(builder: (context, setState) {
             return AlertDialog(
               title: const Text('New annotation'),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    mainAxisSize: MainAxisSize.max,
-                    children: [
-                      Flexible(
-                        child: ListTile(
-                          contentPadding: EdgeInsets.only(right: 2),
-                          leading: Radio(
-                              value: ModelType.parts,
-                              groupValue: modelType,
-                              onChanged: (ModelType? value) {
-                                setState(() {
-                                  categoryId = 0;
-                                  modelType = value!;
-                                });
-                              }),
-                          title: Text('Parts'),
-                        ),
-                      ),
-                      Flexible(
-                        child: ListTile(
-                          contentPadding: EdgeInsets.only(left: 2),
-                          leading: Radio(
-                              value: ModelType.damage,
-                              groupValue: modelType,
-                              onChanged: (ModelType? value) {
-                                setState(() {
-                                  categoryId = 0;
-                                  modelType = value!;
-                                });
-                              }),
-                          title: Text('Damages'),
-                        ),
-                      ),
-                    ],
-                  ),
-                  DropdownButton<int>(
-                    value: categoryId,
-                    onChanged: (int? value) {
-                      setState(() {
-                        categoryId = value!;
-                      });
-                    },
-                    items: classNames.map((String value) {
-                      return DropdownMenuItem(
-                        value: classNames.indexOf(value),
-                        child: Text(value),
-                      );
-                    }).toList(),
-                  ),
-                ],
+              content: DropdownButton<int>(
+                value: categoryId,
+                onChanged: (int? value) {
+                  setState(() {
+                    categoryId = value!;
+                  });
+                },
+                items: classNames.map((String value) {
+                  return DropdownMenuItem(
+                    value: classNames.indexOf(value),
+                    child: Text(value),
+                  );
+                }).toList(),
               ),
               actions: [
                 TextButton(
                     onPressed: () => Navigator.pop(context, null),
                     child: Text('Cancel')),
                 TextButton(
-                    onPressed: () => Navigator.pop(context, {
-                          'super_category': modelType,
-                          'category_id': categoryId
-                        }),
+                    onPressed: () => Navigator.pop(context, categoryId),
                     child: Text('Add'))
               ],
             );
@@ -399,7 +351,7 @@ class _AnnotationScreenState extends State<AnnotationScreen> {
       setState(() {
         _currentAnnotationIndex = annotations.length;
       });
-      annotations.add(Annotation(modelType, categoryId + 1, Polygon([])));
+      annotations.add(Annotation(categoryId, Polygon.empty()));
       return true;
     }
     return false;

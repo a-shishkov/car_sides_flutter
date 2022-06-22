@@ -39,32 +39,36 @@ class _PredictionScreenState extends State<PredictionScreen> {
         elevation: 0,
         title: Text("Prediction"),
       ),
-      body: Container(
-        child: Center(
-          // First it waits to convert all masks of type list
-          // to ui.Image to draw them in painter
-          child: FutureBuilder<Map>(
-            future: widget.prediction.paint(
-                threshold: 0.3, color: ui.Color.fromARGB(100, 100, 100, 255)),
-            builder: (BuildContext context, AsyncSnapshot<Map> snapshot) {
-              if (snapshot.hasData) {
-                // Use this FittedBox and SizedBox together to correctly upscale canvas
-                return FittedBox(
-                  child: SizedBox(
-                    width: snapshot.data!['width'].toDouble(),
-                    height: snapshot.data!['height'].toDouble(),
-                    child: CustomPaint(
-                        foregroundPainter:
-                            PredictionPainter(snapshot.data!['instances']),
-                        child: image),
+      body: FutureBuilder<Map>(
+        future: widget.prediction
+            .paint(threshold: 0.9, color: ui.Color.fromARGB(50, 255, 0, 0)),
+        builder: (BuildContext context, AsyncSnapshot<Map> snapshot) {
+          if (snapshot.hasData) {
+            // Use this FittedBox and SizedBox together to correctly upscale canvas
+            return InteractiveViewer(
+              child: Container(
+                child: Center(
+                  child: FittedBox(
+                    child: SizedBox(
+                      width: snapshot.data!['width'].toDouble(),
+                      height: snapshot.data!['height'].toDouble(),
+                      child: CustomPaint(
+                          foregroundPainter:
+                              PredictionPainter(snapshot.data!['detections']),
+                          child: image),
+                    ),
                   ),
-                );
-              } else {
-                return Text("Waiting");
-              }
-            },
-          ),
-        ),
+                ),
+              ),
+            );
+          } else {
+            return Container(
+              child: Center(
+                child: Text("Waiting"),
+              ),
+            );
+          }
+        },
       ),
     );
   }

@@ -5,6 +5,7 @@ class Polygon {
   List<Offset> points;
 
   Polygon(this.points);
+  Polygon.empty() : points = [];
 
   int get length => points.length;
 

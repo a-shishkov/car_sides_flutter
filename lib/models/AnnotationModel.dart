@@ -1,12 +1,10 @@
 import 'PolygonModel.dart';
-import 'enums/ModelType.dart';
 
 class Annotation {
-  ModelType superCategory;
   int categoryId;
   Polygon polygon;
 
-  Annotation(this.superCategory, this.categoryId, this.polygon);
+  Annotation(this.categoryId, this.polygon);
 
   List<int> get segmentation {
     List<int> segmentation = [];
@@ -17,11 +15,8 @@ class Annotation {
     return segmentation;
   }
 
-  Map<String, dynamic> get toMap => {
-        'super_category': superCategory.toShortString(),
-        'category_id': categoryId,
-        'segmentation': segmentation
-      };
+  Map<String, dynamic> get toMap =>
+      {'category_id': categoryId, 'segmentation': segmentation};
 
   Polygon scalePolygon(double scaleX, double scaleY) {
     return Polygon(List.generate(

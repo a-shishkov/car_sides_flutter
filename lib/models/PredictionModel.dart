@@ -5,50 +5,118 @@ import 'dart:ui' as ui;
 
 class PredictionModel {
   final List boxes;
+  final List classes;
+  final List scores;
   late List masks;
   final int width;
   final int height;
 
-  static get classes =>
-      ['headlamp', 'rear_bumper', 'door', 'hood', 'front_bumper'];
+  static get class_names => [
+        '__background__',
+        'person',
+        'bicycle',
+        'car',
+        'motorcycle',
+        'airplane',
+        'bus',
+        'train',
+        'truck',
+        'boat',
+        'traffic light',
+        'fire hydrant',
+        'stop sign',
+        'parking meter',
+        'bench',
+        'bird',
+        'cat',
+        'dog',
+        'horse',
+        'sheep',
+        'cow',
+        'elephant',
+        'bear',
+        'zebra',
+        'giraffe',
+        'backpack',
+        'umbrella',
+        'handbag',
+        'tie',
+        'suitcase',
+        'frisbee',
+        'skis',
+        'snowboard',
+        'sports ball',
+        'kite',
+        'baseball bat',
+        'baseball glove',
+        'skateboard',
+        'surfboard',
+        'tennis racket',
+        'bottle',
+        'wine glass',
+        'cup',
+        'fork',
+        'knife',
+        'spoon',
+        'bowl',
+        'banana',
+        'apple',
+        'sandwich',
+        'orange',
+        'broccoli',
+        'carrot',
+        'hot dog',
+        'pizza',
+        'donut',
+        'cake',
+        'chair',
+        'couch',
+        'potted plant',
+        'bed',
+        'dining table',
+        'toilet',
+        'tv',
+        'laptop',
+        'mouse',
+        'remote',
+        'keyboard',
+        'cell phone',
+        'microwave',
+        'oven',
+        'toaster',
+        'sink',
+        'refrigerator',
+        'book',
+        'clock',
+        'vase',
+        'scissors',
+        'teddy bear',
+        'hair drier',
+        'toothbrush'
+      ];
 
   PredictionModel.fromMap(Map map)
       : this.width = map['width'],
         this.height = map['height'],
-        this.boxes = map['damage']['boxes'],
-        this.masks = map['damage']['masks'];
-// Code below is for np.packbits data
-/*         {
-    var bool_instances = [];
-    for (var instances in map['damage']['masks']) {
-      var bool_instance = [];
-      for (var instance in instances) {
-        var decoded = base64.decode(instance);
+        this.boxes = map['detection_boxes'],
+        this.classes = map['detection_classes'],
+        this.scores = map['detection_scores']
+  // this.masks = map['detection_masks_reframed']
+  // Code below is for np.packbits data
+  {
+    var new_masks = [];
+    for (var mask in map['detection_masks_reframed']) {
+      var decoded = base64.decode(mask);
 
-        var bool_mask = [];
-        for (var byte in decoded) {
-          for (var bit = 0; bit < 8; bit++) {
-            bool_mask.add((byte >> bit & 1) == 1);
-          }
+      var bool_mask = [];
+      for (var byte in decoded) {
+        for (var bit = 0; bit < 8; bit++) {
+          bool_mask.add((byte >> bit & 1) == 1);
         }
-        bool_instance.add(bool_mask);
       }
-      bool_instances.add(bool_instance);
+      new_masks.add(bool_mask);
     }
-    this.masks = bool_instances;
-  } */
-
-  // Convert all masks to a list of ui.Image
-  getMaskImages() async {
-    var maskImages = [];
-    for (var class_masks in masks) {
-      var classMaskImages = [];
-      for (var mask in class_masks) {
-        classMaskImages.add(await getMaskImage(mask));
-      }
-      maskImages.add(classMaskImages);
-    }
-    return maskImages;
+    this.masks = new_masks;
   }
 
   // Convert mask list to ui.Image
@@ -60,7 +128,7 @@ class PredictionModel {
         (color.red * color.opacity).toInt(),
         (color.green * color.opacity).toInt(),
         (color.blue * color.opacity).toInt(),
-        0
+        color.alpha
       ];
       List<int> transparentColor = [0, 0, 0, 0];
       if (pixel)
@@ -82,21 +150,19 @@ class PredictionModel {
   Future<Map> paint(
       {color = const ui.Color.fromARGB(100, 255, 255, 255),
       threshold = 0.3}) async {
-    var passed_instances = [];
-    for (var class_i = 0; class_i < boxes.length; class_i++) {
-      var class_instances = [];
-      for (var instance_i = 0;
-          instance_i < boxes[class_i].length;
-          instance_i++) {
-        var box = boxes[class_i][instance_i];
-        if (box[4] >= threshold) {
-          var mask = masks[class_i][instance_i];
-          class_instances.add([box, await getMaskImage(mask, color: color)]);
-        }
+    var passed_detections = [];
+    for (var i = 0; i < boxes.length; i++) {
+      var score = scores[i];
+
+      if (score >= threshold) {
+        var _class = classes[i];
+        var box = boxes[i];
+        var mask = masks[i];
+        passed_detections
+            .add([score, _class, box, await getMaskImage(mask, color: color)]);
       }
-      passed_instances.add(class_instances);
     }
 
-    return {"width": width, "height": height, "instances": passed_instances};
+    return {"width": width, "height": height, "detections": passed_detections};
   }
 }
