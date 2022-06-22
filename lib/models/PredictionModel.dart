@@ -111,7 +111,7 @@ class PredictionModel {
       var bool_mask = [];
       for (var byte in decoded) {
         for (var bit = 0; bit < 8; bit++) {
-          bool_mask.add((byte >> bit & 1) == 1);
+          bool_mask.add((byte >> (7 - bit) & 1) == 1);
         }
       }
       new_masks.add(bool_mask);
