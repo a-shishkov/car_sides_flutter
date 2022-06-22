@@ -9,11 +9,12 @@ import '../models/PredictionModel.dart';
 
 class PredictionController {
   // Send base64 image to the server
-  // Get prediction of type:
-  // {'width': int, 'height': int, 'damage': {'boxes': [model_classes *
-  //   [instances * [left, top, right, bottom, confidence]]],
-  //   'masks': [models_classes *
-  //   [instances * [bool mask of size (h,w)]]}}
+  // Get detection of type:
+  // {'width': int, 'height': int, 
+  // 'boxes': [instances * [left, top, right, bottom, confidence]],
+  // 'masks': [instances * [bool mask of size (h,w)]
+  // 'scores': [instances of double],
+  // 'classes': [instances of int]}
   static Future predict(List<int> image,
       {List<Annotation>? annotations}) async {
     Map<String, dynamic> data = {'image': base64.encode(image)};
