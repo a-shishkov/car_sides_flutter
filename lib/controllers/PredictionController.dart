@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/material.dart';
 import 'package:image/image.dart' as image_package;
 import 'package:tflite_flutter/tflite_flutter.dart' as tfl;
 import 'package:tflite_flutter_helper/tflite_flutter_helper.dart';
@@ -8,6 +9,7 @@ import 'package:dio/dio.dart';
 import '../main.dart';
 import '../models/AnnotationModel.dart';
 import '../models/PredictionModel.dart';
+import '../widgets/screens/AnnotationScreen.dart';
 
 enum InferenceType { device, server }
 
@@ -112,10 +114,16 @@ class PredictionController {
   static Future predict(
     image_package.Image image,
     String imagePath, {
-    List<Annotation>? annotations,
     bool isAsset = false,
     InferenceType type = InferenceType.server,
   }) async {
+    var annotations = await navigatorKey.currentState!.push(
+        MaterialPageRoute(
+            builder: (context) => AnnotationScreen(
+                imagePath: imagePath,
+                isAsset: isAsset,
+                size: Size(image.width.toDouble(), image.height.toDouble()))));
+
     if (type == InferenceType.server)
       return _serverPrediction(image, imagePath,
           annotations: annotations, isAsset: isAsset);

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import 'package:flutter/services.dart';
 
+import 'controllers/PredictionController.dart';
 import 'models/PredictionModel.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -13,6 +14,7 @@ import 'widgets/screens/SettingsScreen.dart';
 
 List<CameraDescription> cameras = <CameraDescription>[];
 late SharedPreferences prefs;
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -54,6 +56,7 @@ class MyApp extends StatelessWidget {
         useMaterial3: true,
       ),
       themeMode: ThemeMode.system,
+      navigatorKey: navigatorKey,
       home: MyHomePage(),
     );
   }
@@ -71,7 +74,8 @@ class _MyHomePageState extends State<MyHomePage> {
   late PredictionModel prediction;
   bool doShowPrediction = false;
 
-  var isDemo = prefs.getBool("isDemo") ?? false;
+  bool isDemo = prefs.getBool("isDemo") ?? false;
+  InferenceType inferenceType = InferenceType.server;
 
   @override
   Widget build(BuildContext context) {
@@ -87,7 +91,8 @@ class _MyHomePageState extends State<MyHomePage> {
             itemBuilder: (context) => [
               CheckedPopupMenuItem(
                   value: 0, checked: isDemo, child: Text('Demo')),
-              PopupMenuItem(value: 1, child: Text('Settings')),
+              PopupMenuItem(value: 1, child: Text('$inferenceType')),
+              PopupMenuItem(value: 2, child: Text('Settings')),
             ],
             onSelected: (value) {
               switch (value) {
@@ -98,6 +103,14 @@ class _MyHomePageState extends State<MyHomePage> {
                   prefs.setBool("isDemo", isDemo);
                   break;
                 case 1:
+                  setState(() {
+                    if (inferenceType == InferenceType.server)
+                      inferenceType = InferenceType.device;
+                    else
+                      inferenceType = InferenceType.server;
+                  });
+                  break;
+                case 2:
                   Navigator.push(
                       context,
                       MaterialPageRoute(
@@ -110,7 +123,7 @@ class _MyHomePageState extends State<MyHomePage> {
       ),
       body: Container(
         child: Center(
-          child: isDemo ? DemoScreen() : CameraScreen(),
+          child: isDemo ? DemoScreen(inferenceType) : CameraScreen(inferenceType),
         ),
       ),
     );

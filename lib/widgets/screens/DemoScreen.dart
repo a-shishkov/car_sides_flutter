@@ -13,7 +13,9 @@ import 'AnnotationScreen.dart';
 import 'PredictionScreen.dart';
 
 class DemoScreen extends StatefulWidget {
-  const DemoScreen({Key? key}) : super(key: key);
+  const DemoScreen(this.inferenceType, {Key? key}) : super(key: key);
+
+  final InferenceType inferenceType;
 
   @override
   State<DemoScreen> createState() => _DemoScreenState();
@@ -71,16 +73,8 @@ class _DemoScreenState extends State<DemoScreen> {
     var image_data = Uint8List.view(byteData.buffer);
     var image = image_package.decodeImage(image_data)!;
 
-    var annotations = await Navigator.push(
-        context,
-        MaterialPageRoute(
-            builder: (context) => AnnotationScreen(
-                imagePath: path,
-                isAsset: true,
-                size: Size(image.width.toDouble(), image.height.toDouble()))));
-
     PredictionController.predict(image, path,
-            annotations: annotations, isAsset: true, type: InferenceType.server)
+            isAsset: true, type: widget.inferenceType)
         .then((value) => Navigator.push(
               context,
               MaterialPageRoute(

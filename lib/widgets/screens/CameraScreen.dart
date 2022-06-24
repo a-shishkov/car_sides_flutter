@@ -9,8 +9,9 @@ import 'AnnotationScreen.dart';
 import 'PredictionScreen.dart';
 
 class CameraScreen extends StatefulWidget {
-  const CameraScreen({Key? key}) : super(key: key);
+  const CameraScreen(this.inferenceType, {Key? key}) : super(key: key);
 
+  final InferenceType inferenceType;
   @override
   State<CameraScreen> createState() => _CameraScreenState();
 }
@@ -109,17 +110,8 @@ class _CameraScreenState extends State<CameraScreen>
 
     var image = image_package.decodeImage(image_data)!;
 
-    var annotations = await Navigator.push(
-        context,
-        MaterialPageRoute(
-            builder: (context) => AnnotationScreen(
-                image: file,
-                size: Size(image.width.toDouble(), image.height.toDouble()))));
-
     PredictionController.predict(image, file.path,
-            annotations: annotations,
-            isAsset: false,
-            type: InferenceType.server)
+            isAsset: false, type: widget.inferenceType)
         .then((value) => Navigator.push(
               context,
               MaterialPageRoute(
