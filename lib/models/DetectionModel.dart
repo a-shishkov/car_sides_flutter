@@ -111,16 +111,16 @@ class DetectionModel {
   DetectionModel.fromMap(Map map, this.imagePath, this.isAsset)
       : this.width = map['width'],
         this.height = map['height'],
-        this.boxes = map['detection_boxes'],
-        this.classes = map['detection_classes'],
-        this.scores = map['detection_scores']
+        this.boxes = map['boxes'],
+        this.classes = map['classes'],
+        this.scores = map['scores']
   // this.masks = map['detection_masks_reframed']
   // Code below is for np.packbits data
   {
-    if (!map.containsKey('detection_masks_reframed')) return;
+    if (!map.containsKey('masks')) return;
 
     var new_masks = [];
-    for (var mask in map['detection_masks_reframed']) {
+    for (var mask in map['masks']) {
       var decoded = base64.decode(mask);
 
       var bool_mask = [];
