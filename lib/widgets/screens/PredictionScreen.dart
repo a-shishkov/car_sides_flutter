@@ -4,24 +4,16 @@ import 'dart:ui' as ui;
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 
+import '../../models/PaintModel.dart';
 import '../../models/PredictionModel.dart';
 import '../painters/PredictionPainter.dart';
 
 // Screen is using to display result of server inference
 class PredictionScreen extends StatefulWidget {
-  PredictionScreen(
-      {this.image,
-      this.imagePath,
-      this.isAsset = false,
-      required this.prediction,
-      Key? key})
-      : super(key: key) {
+  PredictionScreen({required this.prediction, Key? key}) : super(key: key) {
     // assert(image != null || imagePath != null);
   }
 
-  final XFile? image;
-  final String? imagePath;
-  final bool isAsset;
   final PredictionModel prediction;
 
   @override
@@ -39,10 +31,11 @@ class _PredictionScreenState extends State<PredictionScreen> {
         elevation: 0,
         title: Text("Prediction"),
       ),
-      body: FutureBuilder<Map>(
+      body: FutureBuilder<List<PaintModel>>(
         future: widget.prediction
-            .paint(threshold: 0.0, color: ui.Color.fromARGB(50, 255, 0, 0)),
-        builder: (BuildContext context, AsyncSnapshot<Map> snapshot) {
+            .paint(threshold: 0.5, color: ui.Color.fromARGB(50, 255, 0, 0)),
+        builder:
+            (BuildContext context, AsyncSnapshot<List<PaintModel>> snapshot) {
           if (snapshot.hasData) {
             // Use this FittedBox and SizedBox together to correctly upscale canvas
             return InteractiveViewer(
@@ -50,12 +43,12 @@ class _PredictionScreenState extends State<PredictionScreen> {
                 child: Center(
                   child: FittedBox(
                     child: SizedBox(
-                      width: snapshot.data!['width'].toDouble(),
-                      height: snapshot.data!['height'].toDouble(),
+                      width: prediction.width.toDouble(),
+                      height: prediction.height.toDouble(),
                       child: CustomPaint(
-                          foregroundPainter:
-                              PredictionPainter(snapshot.data!['detections']),
-                          child: image),
+                        foregroundPainter: PredictionPainter(snapshot.data!),
+                        child: image,
+                      ),
                     ),
                   ),
                 ),
@@ -74,9 +67,10 @@ class _PredictionScreenState extends State<PredictionScreen> {
   }
 
   Image get image {
-    return Image.asset(widget.prediction.imagePath);
-    // if (widget.isAsset) return Image.asset(widget.imagePath!);
+    if (prediction.isAsset) return Image.asset(prediction.imagePath);
 
-    return Image.file(File(widget.prediction.imagePath));
+    return Image.file(File(prediction.imagePath));
   }
+
+  PredictionModel get prediction => widget.prediction;
 }

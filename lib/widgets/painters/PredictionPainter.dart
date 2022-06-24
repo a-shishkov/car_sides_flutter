@@ -1,24 +1,25 @@
 import 'package:flutter/material.dart';
 import 'dart:ui' as ui;
 
+import '../../models/PaintModel.dart';
 import '../../models/PredictionModel.dart';
 
 // Used to display bboxes masks and captions from server on image
 class PredictionPainter extends CustomPainter {
   PredictionPainter(this.detections);
 
-  final List detections;
+  final List<PaintModel> detections;
 
   @override
   void paint(Canvas canvas, Size size) {
     for (var i = 0; i < detections.length; i++) {
-      var score = detections[i][0];
-      var _class = detections[i][1];
-      var box = detections[i][2];
-      // var mask = detections[i][3];
+      var score = detections[i].score;
+      var _class = detections[i].classID;
+      var box = detections[i].box;
+      var mask = detections[i].mask;
 
+      if (mask != null) canvas.drawImage(mask, Offset.zero, Paint());
       drawBox(canvas, box);
-      // canvas.drawImage(mask, Offset.zero, Paint());
       drawCaptions(canvas, score, _class, box);
     }
   }

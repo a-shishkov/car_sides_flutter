@@ -116,12 +116,14 @@ class _CameraScreenState extends State<CameraScreen>
                 image: file,
                 size: Size(image.width.toDouble(), image.height.toDouble()))));
 
-    PredictionController.predict(image_data, annotations: annotations)
+    PredictionController.predict(image, file.path,
+            annotations: annotations,
+            isAsset: false,
+            type: InferenceType.server)
         .then((value) => Navigator.push(
               context,
               MaterialPageRoute(
-                  builder: (context) =>
-                      PredictionScreen(image: file, prediction: value)),
+                  builder: (context) => PredictionScreen(prediction: value)),
             ))
         .onError((error, stackTrace) => print("Error: $error"));
   }
