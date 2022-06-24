@@ -49,7 +49,7 @@ class PredictionController {
   // Inference on device using converted to TFLite model from
   // https://github.com/tensorflow/models/tree/master/research/object_detection
   static Future _devicePrediction(image_package.Image image, String path,
-      {List<Annotation>? annotations, bool isAsset = false}) async {
+      {bool isAsset = false}) async {
     int modelWidth = 640;
     int modelHeight = 640;
     final interpreter = await tfl.Interpreter.fromAsset('ssd_mobilenet.tflite');
@@ -117,18 +117,20 @@ class PredictionController {
     bool isAsset = false,
     InferenceType type = InferenceType.server,
   }) async {
-    var annotations = await navigatorKey.currentState!.push(
-        MaterialPageRoute(
-            builder: (context) => AnnotationScreen(
-                imagePath: imagePath,
-                isAsset: isAsset,
-                size: Size(image.width.toDouble(), image.height.toDouble()))));
-
-    if (type == InferenceType.server)
+    if (type == InferenceType.server) {
+      var annotations = await _createAnnotations(imagePath, isAsset,
+          Size(image.width.toDouble(), image.height.toDouble()));
       return _serverPrediction(image, imagePath,
           annotations: annotations, isAsset: isAsset);
-    if (type == InferenceType.device)
-      return _devicePrediction(image, imagePath,
-          annotations: annotations, isAsset: isAsset);
+    }
+    if (type == InferenceType.device) {
+      return _devicePrediction(image, imagePath, isAsset: isAsset);
+    }
+  }
+
+  static _createAnnotations(imagePath, isAsset, size) async {
+    return await navigatorKey.currentState!.push(MaterialPageRoute(
+        builder: (context) => AnnotationScreen(
+            imagePath: imagePath, isAsset: isAsset, size: size)));
   }
 }
