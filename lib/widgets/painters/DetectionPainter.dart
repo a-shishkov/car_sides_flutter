@@ -14,13 +14,13 @@ class DetectionPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     for (var i = 0; i < detections.length; i++) {
       var score = detections[i].score;
-      var _class = detections[i].classID;
+      var classID = detections[i].classID;
       var box = detections[i].box;
       var mask = detections[i].mask;
 
       if (mask != null) canvas.drawImage(mask, Offset.zero, Paint());
       drawBox(canvas, box);
-      drawCaptions(canvas, score, _class, box);
+      drawCaptions(canvas, score, classID, box);
     }
   }
 

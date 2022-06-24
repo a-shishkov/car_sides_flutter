@@ -22,9 +22,22 @@ class DemoScreen extends StatefulWidget {
 }
 
 class _DemoScreenState extends State<DemoScreen> {
-  PageController pageController = PageController(initialPage: 0);
-  int selectedImage = 0;
+  late PageController pageController;
+  late int selectedImage;
   List imageItems = prefs.getStringList('testImagesList') ?? [];
+
+  @override
+  void initState() {
+    selectedImage = prefs.getInt('selectedImage') ?? 0;
+    pageController = PageController(initialPage: selectedImage);
+    super.initState();
+  }
+
+  @override
+  void dispose() {
+    pageController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -34,7 +47,7 @@ class _DemoScreenState extends State<DemoScreen> {
           // Swipeable gallery of all asset images
           PhotoViewGallery.builder(
               pageController: pageController,
-              onPageChanged: imagePageChanged,
+              onPageChanged: pageChanged,
               itemCount: imageItems.length,
               builder: (BuildContext context, int index) {
                 return PhotoViewGalleryPageOptions(
@@ -61,8 +74,9 @@ class _DemoScreenState extends State<DemoScreen> {
     ]);
   }
 
-  void imagePageChanged(int index) {
+  void pageChanged(int index) {
     selectedImage = index;
+    prefs.setInt('selectedImage', selectedImage);
   }
 
   // Send selected image to server
