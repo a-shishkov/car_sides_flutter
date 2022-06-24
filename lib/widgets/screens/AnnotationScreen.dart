@@ -3,7 +3,7 @@ import 'dart:math';
 import 'package:camera/camera.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_app/models/PredictionModel.dart';
+import 'package:flutter_app/models/DetectionModel.dart';
 
 import '../../models/AnnotationModel.dart';
 import '../../models/PolygonModel.dart';
@@ -68,7 +68,7 @@ class _AnnotationScreenState extends State<AnnotationScreen> {
 
   Position? _selectedPoint;
 
-  List<String> get classNames => PredictionModel.class_names;
+  List<String> get classNames => DetectionModel.class_names;
 
   Annotation get _currentAnnotation => annotations[_currentAnnotationIndex];
   int _currentAnnotationIndex = -1;

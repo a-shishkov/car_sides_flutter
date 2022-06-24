@@ -4,8 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import 'package:flutter/services.dart';
 
-import 'controllers/PredictionController.dart';
-import 'models/PredictionModel.dart';
+import 'controllers/DetectionController.dart';
+import 'models/DetectionModel.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'widgets/screens/CameraScreen.dart';
@@ -71,8 +71,8 @@ class MyHomePage extends StatefulWidget {
 
 class _MyHomePageState extends State<MyHomePage> {
   late XFile image;
-  late PredictionModel prediction;
-  bool doShowPrediction = false;
+  late DetectionModel detection;
+  bool doShowDetection = false;
 
   bool isDemo = prefs.getBool("isDemo") ?? false;
   InferenceType inferenceType = InferenceType.server;
@@ -123,7 +123,8 @@ class _MyHomePageState extends State<MyHomePage> {
       ),
       body: Container(
         child: Center(
-          child: isDemo ? DemoScreen(inferenceType) : CameraScreen(inferenceType),
+          child:
+              isDemo ? DemoScreen(inferenceType) : CameraScreen(inferenceType),
         ),
       ),
     );

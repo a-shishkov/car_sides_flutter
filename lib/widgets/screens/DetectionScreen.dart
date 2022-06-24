@@ -5,22 +5,22 @@ import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 
 import '../../models/PaintModel.dart';
-import '../../models/PredictionModel.dart';
-import '../painters/PredictionPainter.dart';
+import '../../models/DetectionModel.dart';
+import '../painters/DetectionPainter.dart';
 
 // Screen is using to display result of server inference
-class PredictionScreen extends StatefulWidget {
-  PredictionScreen({required this.prediction, Key? key}) : super(key: key) {
+class DetectionScreen extends StatefulWidget {
+  DetectionScreen({required this.detection, Key? key}) : super(key: key) {
     // assert(image != null || imagePath != null);
   }
 
-  final PredictionModel prediction;
+  final DetectionModel detection;
 
   @override
-  State<PredictionScreen> createState() => _PredictionScreenState();
+  State<DetectionScreen> createState() => _DetectionScreenState();
 }
 
-class _PredictionScreenState extends State<PredictionScreen> {
+class _DetectionScreenState extends State<DetectionScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -32,7 +32,7 @@ class _PredictionScreenState extends State<PredictionScreen> {
         title: Text("Prediction"),
       ),
       body: FutureBuilder<List<PaintModel>>(
-        future: widget.prediction
+        future: widget.detection
             .paint(threshold: 0.5, color: ui.Color.fromARGB(50, 255, 0, 0)),
         builder:
             (BuildContext context, AsyncSnapshot<List<PaintModel>> snapshot) {
@@ -46,7 +46,7 @@ class _PredictionScreenState extends State<PredictionScreen> {
                       width: prediction.width.toDouble(),
                       height: prediction.height.toDouble(),
                       child: CustomPaint(
-                        foregroundPainter: PredictionPainter(snapshot.data!),
+                        foregroundPainter: DetectionPainter(snapshot.data!),
                         child: image,
                       ),
                     ),
@@ -72,5 +72,5 @@ class _PredictionScreenState extends State<PredictionScreen> {
     return Image.file(File(prediction.imagePath));
   }
 
-  PredictionModel get prediction => widget.prediction;
+  DetectionModel get prediction => widget.detection;
 }

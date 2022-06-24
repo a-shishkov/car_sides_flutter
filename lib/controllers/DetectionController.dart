@@ -8,12 +8,12 @@ import 'package:dio/dio.dart';
 
 import '../main.dart';
 import '../models/AnnotationModel.dart';
-import '../models/PredictionModel.dart';
+import '../models/DetectionModel.dart';
 import '../widgets/screens/AnnotationScreen.dart';
 
 enum InferenceType { device, server }
 
-class PredictionController {
+class DetectionController {
   // Send base64 image to the server
   // Get detection of type:
   // {'width': int, 'height': int,
@@ -21,7 +21,7 @@ class PredictionController {
   // 'masks': [instances * [bool mask of size (h,w)]
   // 'scores': [instances of double],
   // 'classes': [instances of int]}
-  static Future _serverPrediction(image_package.Image image, String imagePath,
+  static Future _serverDetection(image_package.Image image, String imagePath,
       {List<Annotation>? annotations, bool isAsset = false}) async {
     Map<String, dynamic> data = {
       'image': base64.encode(image.getBytes(format: image_package.Format.rgb)),
@@ -34,13 +34,13 @@ class PredictionController {
     try {
       var serverIP = prefs.getString('serverIP');
       var response = await Dio().post(
-        'http://$serverIP:5000/predict',
+        'http://$serverIP:5000/detect',
         data: data,
       );
 
-      var predictionMap = json.decode(response.data);
+      var detectionMap = json.decode(response.data);
 
-      return PredictionModel.fromMap(predictionMap, imagePath, isAsset);
+      return DetectionModel.fromMap(detectionMap, imagePath, isAsset);
     } catch (e) {
       return Future.error(e);
     }
@@ -48,7 +48,7 @@ class PredictionController {
 
   // Inference on device using converted to TFLite model from
   // https://github.com/tensorflow/models/tree/master/research/object_detection
-  static Future _devicePrediction(image_package.Image image, String path,
+  static Future _deviceDetection(image_package.Image image, String path,
       {bool isAsset = false}) async {
     int modelWidth = 640;
     int modelHeight = 640;
@@ -100,7 +100,7 @@ class PredictionController {
 
     interpreter.close();
 
-    return PredictionModel(
+    return DetectionModel(
       renormBoxes,
       offsetClasses,
       scores,
@@ -111,7 +111,7 @@ class PredictionController {
     );
   }
 
-  static Future predict(
+  static Future detect(
     image_package.Image image,
     String imagePath, {
     bool isAsset = false,
@@ -120,11 +120,11 @@ class PredictionController {
     if (type == InferenceType.server) {
       var annotations = await _createAnnotations(imagePath, isAsset,
           Size(image.width.toDouble(), image.height.toDouble()));
-      return _serverPrediction(image, imagePath,
+      return _serverDetection(image, imagePath,
           annotations: annotations, isAsset: isAsset);
     }
     if (type == InferenceType.device) {
-      return _devicePrediction(image, imagePath, isAsset: isAsset);
+      return _deviceDetection(image, imagePath, isAsset: isAsset);
     }
   }
 

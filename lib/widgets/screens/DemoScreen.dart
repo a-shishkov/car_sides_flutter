@@ -6,11 +6,11 @@ import 'package:photo_view/photo_view.dart';
 import 'package:photo_view/photo_view_gallery.dart';
 import 'package:image/image.dart' as image_package;
 
-import '../../controllers/PredictionController.dart';
+import '../../controllers/DetectionController.dart';
 import '../../main.dart';
 import '../CameraPlain.dart';
 import 'AnnotationScreen.dart';
-import 'PredictionScreen.dart';
+import 'DetectionScreen.dart';
 
 class DemoScreen extends StatefulWidget {
   const DemoScreen(this.inferenceType, {Key? key}) : super(key: key);
@@ -73,12 +73,12 @@ class _DemoScreenState extends State<DemoScreen> {
     var image_data = Uint8List.view(byteData.buffer);
     var image = image_package.decodeImage(image_data)!;
 
-    PredictionController.predict(image, path,
+    DetectionController.detect(image, path,
             isAsset: true, type: widget.inferenceType)
         .then((value) => Navigator.push(
               context,
               MaterialPageRoute(
-                  builder: (context) => PredictionScreen(prediction: value)),
+                  builder: (context) => DetectionScreen(detection: value)),
             ))
         .onError((error, stackTrace) => print("Error: $error"));
   }

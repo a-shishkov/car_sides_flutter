@@ -2,11 +2,11 @@ import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:image/image.dart' as image_package;
 
-import '../../controllers/PredictionController.dart';
+import '../../controllers/DetectionController.dart';
 import '../../main.dart';
 import '../CameraPlain.dart';
 import 'AnnotationScreen.dart';
-import 'PredictionScreen.dart';
+import 'DetectionScreen.dart';
 
 class CameraScreen extends StatefulWidget {
   const CameraScreen(this.inferenceType, {Key? key}) : super(key: key);
@@ -99,7 +99,7 @@ class _CameraScreenState extends State<CameraScreen>
     }
   }
 
-  // Send taken image to server and get prediction
+  // Send taken image to server and get detection
   void takePicture() async {
     if (_controller!.value.isTakingPicture) {
       return;
@@ -110,12 +110,12 @@ class _CameraScreenState extends State<CameraScreen>
 
     var image = image_package.decodeImage(image_data)!;
 
-    PredictionController.predict(image, file.path,
+    DetectionController.detect(image, file.path,
             isAsset: false, type: widget.inferenceType)
-        .then((value) => Navigator.push(
+        .then((detection) => Navigator.push(
               context,
               MaterialPageRoute(
-                  builder: (context) => PredictionScreen(prediction: value)),
+                  builder: (context) => DetectionScreen(detection: detection)),
             ))
         .onError((error, stackTrace) => print("Error: $error"));
   }

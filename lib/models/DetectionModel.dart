@@ -5,7 +5,7 @@ import 'dart:ui' as ui;
 
 import 'PaintModel.dart';
 
-class PredictionModel {
+class DetectionModel {
   static get class_names => {
         1: "person",
         2: "bicycle",
@@ -97,7 +97,7 @@ class PredictionModel {
   final String imagePath;
   final bool isAsset;
 
-  PredictionModel(
+  DetectionModel(
     this.boxes,
     this.classes,
     this.scores,
@@ -108,7 +108,7 @@ class PredictionModel {
     this.masks,
   ]);
 
-  PredictionModel.fromMap(Map map, this.imagePath, this.isAsset)
+  DetectionModel.fromMap(Map map, this.imagePath, this.isAsset)
       : this.width = map['width'],
         this.height = map['height'],
         this.boxes = map['detection_boxes'],

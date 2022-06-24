@@ -2,11 +2,11 @@ import 'package:flutter/material.dart';
 import 'dart:ui' as ui;
 
 import '../../models/PaintModel.dart';
-import '../../models/PredictionModel.dart';
+import '../../models/DetectionModel.dart';
 
 // Used to display bboxes masks and captions from server on image
-class PredictionPainter extends CustomPainter {
-  PredictionPainter(this.detections);
+class DetectionPainter extends CustomPainter {
+  DetectionPainter(this.detections);
 
   final List<PaintModel> detections;
 
@@ -41,7 +41,7 @@ class PredictionPainter extends CustomPainter {
 
   void drawCaptions(Canvas canvas, double score, int _class, List box) {
     var rect = Rect.fromLTRB(box[1], box[0], box[3], box[2]);
-    var className = PredictionModel.class_names[_class];
+    var className = DetectionModel.class_names[_class];
 
     var builder = ui.ParagraphBuilder(ui.ParagraphStyle(fontSize: 20));
     builder.addText('$className ${score.toStringAsFixed(2)}');
