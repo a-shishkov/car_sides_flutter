@@ -7,9 +7,10 @@ class PredictionModel {
   final List boxes;
   final List classes;
   final List scores;
-  late List masks;
+  late List? masks;
   final int width;
   final int height;
+  final String imagePath;
 
   static get class_names => [
         '__background__',
@@ -95,15 +96,28 @@ class PredictionModel {
         'toothbrush'
       ];
 
+  PredictionModel(
+    this.width,
+    this.height,
+    this.boxes,
+    this.classes,
+    this.scores,
+    this.imagePath, [
+    this.masks,
+  ]);
+
   PredictionModel.fromMap(Map map)
       : this.width = map['width'],
         this.height = map['height'],
         this.boxes = map['detection_boxes'],
         this.classes = map['detection_classes'],
-        this.scores = map['detection_scores']
+        this.scores = map['detection_scores'],
+        this.imagePath = map['image_path']
   // this.masks = map['detection_masks_reframed']
   // Code below is for np.packbits data
   {
+    if (!map.containsKey('detection_masks_reframed')) return;
+
     var new_masks = [];
     for (var mask in map['detection_masks_reframed']) {
       var decoded = base64.decode(mask);
@@ -157,9 +171,8 @@ class PredictionModel {
       if (score >= threshold) {
         var _class = classes[i];
         var box = boxes[i];
-        var mask = masks[i];
-        passed_detections
-            .add([score, _class, box, await getMaskImage(mask, color: color)]);
+
+        passed_detections.add([score, _class, box]);
       }
     }
 

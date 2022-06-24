@@ -6,6 +6,7 @@ import 'package:photo_view/photo_view.dart';
 import 'package:photo_view/photo_view_gallery.dart';
 import 'package:image/image.dart' as image_package;
 
+import '../../controllers/DevicePrediction.dart';
 import '../../controllers/PredictionController.dart';
 import '../../main.dart';
 import '../CameraPlain.dart';
@@ -71,21 +72,29 @@ class _DemoScreenState extends State<DemoScreen> {
     var image_data = Uint8List.view(byteData.buffer);
     var image = image_package.decodeImage(image_data)!;
 
-    var annotations = await Navigator.push(
-        context,
-        MaterialPageRoute(
-            builder: (context) => AnnotationScreen(
-                imagePath: path,
-                isAsset: true,
-                size: Size(image.width.toDouble(), image.height.toDouble()))));
+    // var annotations = await Navigator.push(
+    //     context,
+    //     MaterialPageRoute(
+    //         builder: (context) => AnnotationScreen(
+    //             imagePath: path,
+    //             isAsset: true,
+    //             size: Size(image.width.toDouble(), image.height.toDouble()))));
 
-    PredictionController.predict(image_data, annotations: annotations)
-        .then((value) => Navigator.push(
+    DevicePrediction.predict(image, path)
+        .then((detection) => Navigator.push(
               context,
               MaterialPageRoute(
-                  builder: (context) => PredictionScreen(
-                      imagePath: path, prediction: value, isAsset: true)),
+                  builder: (context) =>
+                      PredictionScreen(prediction: detection)),
             ))
         .onError((error, stackTrace) => print("Error: $error"));
+    // PredictionController.predict(image_data, annotations: annotations)
+    //     .then((value) => Navigator.push(
+    //           context,
+    //           MaterialPageRoute(
+    //               builder: (context) => PredictionScreen(
+    //                   imagePath: path, prediction: value, isAsset: true)),
+    //         ))
+    //     .onError((error, stackTrace) => print("Error: $error"));
   }
 }

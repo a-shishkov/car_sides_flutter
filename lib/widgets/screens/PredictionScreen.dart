@@ -16,7 +16,7 @@ class PredictionScreen extends StatefulWidget {
       required this.prediction,
       Key? key})
       : super(key: key) {
-    assert(image != null || imagePath != null);
+    // assert(image != null || imagePath != null);
   }
 
   final XFile? image;
@@ -41,7 +41,7 @@ class _PredictionScreenState extends State<PredictionScreen> {
       ),
       body: FutureBuilder<Map>(
         future: widget.prediction
-            .paint(threshold: 0.9, color: ui.Color.fromARGB(50, 255, 0, 0)),
+            .paint(threshold: 0.0, color: ui.Color.fromARGB(50, 255, 0, 0)),
         builder: (BuildContext context, AsyncSnapshot<Map> snapshot) {
           if (snapshot.hasData) {
             // Use this FittedBox and SizedBox together to correctly upscale canvas
@@ -74,8 +74,9 @@ class _PredictionScreenState extends State<PredictionScreen> {
   }
 
   Image get image {
-    if (widget.isAsset) return Image.asset(widget.imagePath!);
+    return Image.asset(widget.prediction.imagePath);
+    // if (widget.isAsset) return Image.asset(widget.imagePath!);
 
-    return Image.file(File(widget.image!.path));
+    return Image.file(File(widget.prediction.imagePath));
   }
 }

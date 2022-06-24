@@ -23,25 +23,20 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  provider: ^6.0.1
   camera: ^0.9.4+9
-  get: ^4.1.4
   shared_preferences: ^2.0.9
-  filesize: ^2.0.1
-  regexed_validator: ^2.0.0+1
   photo_view:
     git: https://github.com/bluefireteam/photo_view.git
+  dio: ^4.0.6
   tflite_flutter: ^0.9.0
   tflite_flutter_helper: ^0.3.1
-  enum_to_string: ^2.0.1
-  device_info_plus: ^3.2.1
-  touchable: ^1.0.0
-  dio: ^4.0.6
+  path_provider: ^2.0.11
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_launcher_icons: ^0.9.0
+  dependency_validator: ^3.0.0
 
 flutter_icons:
   image_path: "assets/icon.png"

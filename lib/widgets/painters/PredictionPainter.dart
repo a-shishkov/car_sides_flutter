@@ -15,10 +15,10 @@ class PredictionPainter extends CustomPainter {
       var score = detections[i][0];
       var _class = detections[i][1];
       var box = detections[i][2];
-      var mask = detections[i][3];
+      // var mask = detections[i][3];
 
       drawBox(canvas, box);
-      canvas.drawImage(mask, Offset.zero, Paint());
+      // canvas.drawImage(mask, Offset.zero, Paint());
       drawCaptions(canvas, score, _class, box);
     }
   }

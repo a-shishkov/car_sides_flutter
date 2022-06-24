@@ -11,7 +11,7 @@ class PredictionController {
   // Send base64 image to the server
   // Get detection of type:
   // {'width': int, 'height': int, 
-  // 'boxes': [instances * [left, top, right, bottom, confidence]],
+  // 'boxes': [instances * [left, top, right, bottom]],
   // 'masks': [instances * [bool mask of size (h,w)]
   // 'scores': [instances of double],
   // 'classes': [instances of int]}
