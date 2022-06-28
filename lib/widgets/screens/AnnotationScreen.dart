@@ -68,7 +68,7 @@ class _AnnotationScreenState extends State<AnnotationScreen> {
 
   Position? _selectedPoint;
 
-  List<String> get classNames => DetectionModel.class_names;
+  Map<int, String> get classNames => DetectionModel.class_names;
 
   Annotation get _currentAnnotation => annotations[_currentAnnotationIndex];
   int _currentAnnotationIndex = -1;
@@ -313,7 +313,7 @@ class _AnnotationScreenState extends State<AnnotationScreen> {
   }
 
   Future<bool> addNewAnnotationDialog() async {
-    int categoryId = 0;
+    int categoryId = 1;
 
     var result = await showDialog(
         context: context,
@@ -328,10 +328,10 @@ class _AnnotationScreenState extends State<AnnotationScreen> {
                     categoryId = value!;
                   });
                 },
-                items: classNames.map((String value) {
+                items: classNames.entries.map((e) {
                   return DropdownMenuItem(
-                    value: classNames.indexOf(value),
-                    child: Text(value),
+                    value: e.key,
+                    child: Text(e.value),
                   );
                 }).toList(),
               ),

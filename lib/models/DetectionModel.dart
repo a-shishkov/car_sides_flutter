@@ -6,7 +6,7 @@ import 'dart:ui' as ui;
 import 'PaintModel.dart';
 
 class DetectionModel {
-  static get class_names => {
+  static Map<int, String> get class_names => {
         1: "person",
         2: "bicycle",
         3: "car",
