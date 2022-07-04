@@ -33,12 +33,13 @@ class _DetectionScreenState extends State<DetectionScreen> {
       ),
       body: FutureBuilder<List<PaintModel>>(
         future: widget.detection
-            .paint(threshold: 0.5, color: ui.Color.fromARGB(50, 255, 0, 0)),
+            .paint(threshold: 0.5, color: ui.Color.fromARGB(75, 81, 255, 0)),
         builder:
             (BuildContext context, AsyncSnapshot<List<PaintModel>> snapshot) {
           if (snapshot.hasData) {
             // Use this FittedBox and SizedBox together to correctly upscale canvas
             return InteractiveViewer(
+              maxScale: 10,
               child: Container(
                 child: Center(
                   child: FittedBox(
