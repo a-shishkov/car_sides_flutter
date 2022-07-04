@@ -6,16 +6,12 @@ import 'package:photo_view/photo_view.dart';
 import 'package:photo_view/photo_view_gallery.dart';
 import 'package:image/image.dart' as image_package;
 
-import '../../controllers/DetectionController.dart';
+import '../../controllers/TensorflowController.dart';
 import '../../main.dart';
 import '../CameraPlain.dart';
-import 'AnnotationScreen.dart';
-import 'DetectionScreen.dart';
 
 class DemoScreen extends StatefulWidget {
-  const DemoScreen(this.inferenceType, {Key? key}) : super(key: key);
-
-  final InferenceType inferenceType;
+  const DemoScreen({Key? key}) : super(key: key);
 
   @override
   State<DemoScreen> createState() => _DemoScreenState();
@@ -87,13 +83,7 @@ class _DemoScreenState extends State<DemoScreen> {
     var image_data = Uint8List.view(byteData.buffer);
     var image = image_package.decodeImage(image_data)!;
 
-    DetectionController.detect(image, path,
-            isAsset: true, type: widget.inferenceType)
-        .then((value) => Navigator.push(
-              context,
-              MaterialPageRoute(
-                  builder: (context) => DetectionScreen(detection: value)),
-            ))
+    TensorflowController.inference(image, path, isAsset: true)
         .onError((error, stackTrace) => print("Error: $error"));
   }
 }

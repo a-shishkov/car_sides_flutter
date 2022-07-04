@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:enum_to_string/enum_to_string.dart';
 import 'package:flutter/material.dart';
 import 'package:image/image.dart' as image_package;
 import 'package:tflite_flutter/tflite_flutter.dart' as tfl;
@@ -10,6 +11,7 @@ import '../main.dart';
 import '../models/AnnotationModel.dart';
 import '../models/DetectionModel.dart';
 import '../widgets/screens/AnnotationScreen.dart';
+import '../widgets/screens/DetectionScreen.dart';
 
 enum InferenceType { device, server }
 
@@ -60,10 +62,7 @@ class DetectionController {
 
     // Norm image to range [0.,1.]
     var bytesImage = croppedImage.getBytes(format: image_package.Format.rgb);
-    List<double> normImage = [];
-    for (var byte in bytesImage) {
-      normImage.add(byte / 255);
-    }
+    List<double> normImage = bytesImage.map((byte) => (byte) / 1).toList();
     var reshapedImage = normImage.reshape([1, modelHeight, modelWidth, 3]);
 
     // Initialize and allocate output tensors for model
@@ -115,17 +114,23 @@ class DetectionController {
     image_package.Image image,
     String imagePath, {
     bool isAsset = false,
-    InferenceType type = InferenceType.server,
   }) async {
-    if (type == InferenceType.server) {
+    var output;
+    InferenceType inferenceType = EnumToString.fromString(
+            InferenceType.values, prefs.getString("inferenceType") ?? "") ??
+        InferenceType.server;
+    if (inferenceType == InferenceType.server) {
       var annotations = await _createAnnotations(imagePath, isAsset,
           Size(image.width.toDouble(), image.height.toDouble()));
-      return _serverDetection(image, imagePath,
+      output = await _serverDetection(image, imagePath,
           annotations: annotations, isAsset: isAsset);
     }
-    if (type == InferenceType.device) {
-      return _deviceDetection(image, imagePath, isAsset: isAsset);
+    if (inferenceType == InferenceType.device) {
+      output = await _deviceDetection(image, imagePath, isAsset: isAsset);
     }
+
+    navigatorKey.currentState!.push(MaterialPageRoute(
+        builder: (context) => DetectionScreen(detection: output)));
   }
 
   static _createAnnotations(imagePath, isAsset, size) async {

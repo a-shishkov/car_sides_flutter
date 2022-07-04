@@ -159,7 +159,6 @@ class _MagnifierState extends State<Magnifier> {
           ),
       ],
     );
-    ;
   }
 
   void _calculateMatrix() {

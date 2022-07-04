@@ -2,16 +2,13 @@ import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:image/image.dart' as image_package;
 
-import '../../controllers/DetectionController.dart';
+import '../../controllers/TensorflowController.dart';
 import '../../main.dart';
 import '../CameraPlain.dart';
-import 'AnnotationScreen.dart';
-import 'DetectionScreen.dart';
 
 class CameraScreen extends StatefulWidget {
-  const CameraScreen(this.inferenceType, {Key? key}) : super(key: key);
+  const CameraScreen({Key? key}) : super(key: key);
 
-  final InferenceType inferenceType;
   @override
   State<CameraScreen> createState() => _CameraScreenState();
 }
@@ -110,13 +107,7 @@ class _CameraScreenState extends State<CameraScreen>
 
     var image = image_package.decodeImage(image_data)!;
 
-    DetectionController.detect(image, file.path,
-            isAsset: false, type: widget.inferenceType)
-        .then((detection) => Navigator.push(
-              context,
-              MaterialPageRoute(
-                  builder: (context) => DetectionScreen(detection: detection)),
-            ))
+    TensorflowController.inference(image, file.path, isAsset: false)
         .onError((error, stackTrace) => print("Error: $error"));
   }
 }

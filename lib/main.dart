@@ -3,10 +3,10 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import 'package:flutter/services.dart';
+import 'package:enum_to_string/enum_to_string.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'controllers/DetectionController.dart';
-import 'models/DetectionModel.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import 'widgets/screens/CameraScreen.dart';
 import 'widgets/screens/DemoScreen.dart';
@@ -70,12 +70,14 @@ class MyHomePage extends StatefulWidget {
 }
 
 class _MyHomePageState extends State<MyHomePage> {
-  late XFile image;
-  late DetectionModel detection;
-  bool doShowDetection = false;
+  late bool isDemo;
+  late InferenceType inferenceType;
 
-  bool isDemo = prefs.getBool("isDemo") ?? false;
-  InferenceType inferenceType = InferenceType.server;
+  @override
+  void initState() {
+    getOptions();
+    super.initState();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -87,46 +89,31 @@ class _MyHomePageState extends State<MyHomePage> {
         elevation: 0,
         title: Text("Result Car Damage"),
         actions: [
-          PopupMenuButton(
-            itemBuilder: (context) => [
-              CheckedPopupMenuItem(
-                  value: 0, checked: isDemo, child: Text('Demo')),
-              PopupMenuItem(value: 1, child: Text('$inferenceType')),
-              PopupMenuItem(value: 2, child: Text('Settings')),
-            ],
-            onSelected: (value) {
-              switch (value) {
-                case 0:
-                  setState(() {
-                    isDemo = !isDemo;
-                  });
-                  prefs.setBool("isDemo", isDemo);
-                  break;
-                case 1:
-                  setState(() {
-                    if (inferenceType == InferenceType.server)
-                      inferenceType = InferenceType.device;
-                    else
-                      inferenceType = InferenceType.server;
-                  });
-                  break;
-                case 2:
-                  Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                          builder: (context) => SettingsScreen()));
-                  break;
-              }
+          IconButton(
+            icon: Icon(
+              Icons.settings,
+              color: Colors.white,
+            ),
+            onPressed: () async {
+              await Navigator.push(context,
+                  MaterialPageRoute(builder: (context) => SettingsScreen()));
+              setState(getOptions);
             },
           )
         ],
       ),
       body: Container(
         child: Center(
-          child:
-              isDemo ? DemoScreen(inferenceType) : CameraScreen(inferenceType),
+          child: isDemo ? DemoScreen() : CameraScreen(),
         ),
       ),
     );
+  }
+
+  getOptions() {
+    isDemo = prefs.getBool("isDemo") ?? false;
+    inferenceType = EnumToString.fromString(
+            InferenceType.values, prefs.getString("inferenceType") ?? "") ??
+        InferenceType.server;
   }
 }

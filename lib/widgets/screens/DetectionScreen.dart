@@ -1,7 +1,6 @@
 import 'dart:io';
 import 'dart:ui' as ui;
 
-import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 
 import '../../models/PaintModel.dart';
@@ -9,18 +8,11 @@ import '../../models/DetectionModel.dart';
 import '../painters/DetectionPainter.dart';
 
 // Screen is using to display result of server inference
-class DetectionScreen extends StatefulWidget {
-  DetectionScreen({required this.detection, Key? key}) : super(key: key) {
-    // assert(image != null || imagePath != null);
-  }
+class DetectionScreen extends StatelessWidget {
+  DetectionScreen({required this.detection, Key? key}) : super(key: key);
 
   final DetectionModel detection;
 
-  @override
-  State<DetectionScreen> createState() => _DetectionScreenState();
-}
-
-class _DetectionScreenState extends State<DetectionScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -29,11 +21,11 @@ class _DetectionScreenState extends State<DetectionScreen> {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        title: Text("Prediction"),
+        title: Text("Detection"),
       ),
       body: FutureBuilder<List<PaintModel>>(
-        future: widget.detection
-            .paint(threshold: 0.5, color: ui.Color.fromARGB(75, 81, 255, 0)),
+        future: detection.paint(
+            threshold: 0.5, color: ui.Color.fromARGB(75, 81, 255, 0)),
         builder:
             (BuildContext context, AsyncSnapshot<List<PaintModel>> snapshot) {
           if (snapshot.hasData) {
@@ -44,8 +36,8 @@ class _DetectionScreenState extends State<DetectionScreen> {
                 child: Center(
                   child: FittedBox(
                     child: SizedBox(
-                      width: prediction.width.toDouble(),
-                      height: prediction.height.toDouble(),
+                      width: detection.width.toDouble(),
+                      height: detection.height.toDouble(),
                       child: CustomPaint(
                         foregroundPainter: DetectionPainter(snapshot.data!),
                         child: image,
@@ -68,10 +60,9 @@ class _DetectionScreenState extends State<DetectionScreen> {
   }
 
   Image get image {
-    if (prediction.isAsset) return Image.asset(prediction.imagePath);
-
-    return Image.file(File(prediction.imagePath));
+    if (detection.isAsset)
+      return Image.asset(detection.imagePath);
+    else
+      return Image.file(File(detection.imagePath));
   }
-
-  DetectionModel get prediction => widget.detection;
 }
