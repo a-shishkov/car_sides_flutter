@@ -1,7 +1,7 @@
 import 'package:enum_to_string/enum_to_string.dart';
 
 import '../main.dart';
-import 'ClassifierController.dart';
+import 'ClassificationController.dart';
 import 'DetectionController.dart';
 import 'package:image/image.dart' as image_package;
 

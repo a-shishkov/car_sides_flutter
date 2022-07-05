@@ -10,13 +10,10 @@ class ClassifierModel {
   ];
 
   final List<double> predictions;
-  final int width;
-  final int height;
   final String imagePath;
   final bool isAsset;
 
-  ClassifierModel(
-      this.predictions, this.width, this.height, this.imagePath, this.isAsset);
+  ClassifierModel(this.predictions, this.imagePath, this.isAsset);
 
   String get predictionLabel {
     return class_names[maxIndex];

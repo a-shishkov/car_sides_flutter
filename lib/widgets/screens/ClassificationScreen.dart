@@ -2,7 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 
-import '../../models/ClassifierModel.dart';
+import '../../models/ClassificationModel.dart';
 
 class ClassifierScreen extends StatelessWidget {
   const ClassifierScreen({required this.prediction, Key? key})

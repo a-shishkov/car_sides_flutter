@@ -5,8 +5,8 @@ import 'package:tflite_flutter/tflite_flutter.dart';
 import 'package:tflite_flutter_helper/tflite_flutter_helper.dart';
 
 import '../main.dart';
-import '../models/ClassifierModel.dart';
-import '../widgets/screens/ClassifierScreen.dart';
+import '../models/ClassificationModel.dart';
+import '../widgets/screens/ClassificationScreen.dart';
 
 class ClassifierController {
   static Future predict(image_package.Image image, String imagePath,
@@ -16,7 +16,7 @@ class ClassifierController {
     final interpreter =
         await tfl.Interpreter.fromAsset('sides_classifier.tflite');
 
-    // Crop image to 640x640 needed for model
+    // Crop image to 256x256 needed for model
     var croppedImage =
         image_package.copyResize(image, width: modelWidth, height: modelHeight);
 
@@ -34,8 +34,7 @@ class ClassifierController {
 
     interpreter.close();
 
-    var output = ClassifierModel(
-        probability, image.width, image.height, imagePath, isAsset);
+    var output = ClassifierModel(probability, imagePath, isAsset);
 
     navigatorKey.currentState!.push(MaterialPageRoute(
         builder: (context) => ClassifierScreen(prediction: output)));
