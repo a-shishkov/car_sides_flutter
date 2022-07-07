@@ -11,8 +11,8 @@ import '../widgets/screens/ClassificationScreen.dart';
 class ClassifierController {
   static Future predict(image_package.Image image, String imagePath,
       {bool isAsset = false}) async {
-    int modelWidth = 256;
-    int modelHeight = 256;
+    int modelWidth = 180;
+    int modelHeight = 180;
     final interpreter =
         await tfl.Interpreter.fromAsset('sides_classifier.tflite');
 
@@ -22,12 +22,11 @@ class ClassifierController {
 
     var bytesImage = croppedImage.getBytes(format: image_package.Format.rgb);
 
-    List<double> normImage =
-        bytesImage.map((byte) => (byte - 117) / 1).toList();
+    List<double> normImage = bytesImage.map((byte) => byte / 1).toList();
     var reshapedImage = normImage.reshape([1, modelHeight, modelWidth, 3]);
 
     TensorBuffer probabilityBuffer =
-        TensorBuffer.createFixedSize(<int>[5], TfLiteType.float32);
+        TensorBuffer.createFixedSize(<int>[1, 5], TfLiteType.float32);
     interpreter.run(reshapedImage, probabilityBuffer.buffer);
 
     var probability = probabilityBuffer.getDoubleList();

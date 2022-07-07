@@ -1,5 +1,7 @@
 import 'dart:math';
 
+import 'package:flutter/material.dart';
+
 class ClassifierModel {
   static List<String> class_names = [
     "Diagonal",
@@ -24,12 +26,19 @@ class ClassifierModel {
     return predictions.indexOf(maxConfidence);
   }
 
-  @override
-  String toString() {
-    return "$predictionLabel ${predictions[maxIndex].toStringAsFixed(2)}";
-  }
+  List<Widget> get textWidgets => List.generate(
+      5,
+      (index) => Text(
+            "${class_names[index]}: ${predictions[index].toStringAsFixed(2)}",
+            style: TextStyle(color: Colors.white),
+          ));
+
   // @override
   // String toString() {
-  //   return predictions.toString();
+  //   return "$predictionLabel ${predictions[maxIndex].toStringAsFixed(2)}";
   // }
+  @override
+  String toString() {
+    return predictions.toString();
+  }
 }

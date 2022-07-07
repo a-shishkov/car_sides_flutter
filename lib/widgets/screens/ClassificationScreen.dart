@@ -24,13 +24,10 @@ class ClassifierScreen extends StatelessWidget {
           child: Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Expanded(child: image),
-                Text(
-                  prediction.toString(),
-                  style: TextStyle(color: Colors.white),
-                ),
-              ],
+              children: <Widget>[
+                    Expanded(child: image),
+                  ] +
+                  prediction.textWidgets,
             ),
           ),
         ));
