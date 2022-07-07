@@ -7,7 +7,7 @@ class PolygonPainter extends CustomPainter {
   int currentAnnotation;
   Position? selectedPoint;
 
-  List<Annotation> annotations;
+  List<AnnotationModel> annotations;
 
   double _pointStrokeWidth = 1;
   double pointRadius;

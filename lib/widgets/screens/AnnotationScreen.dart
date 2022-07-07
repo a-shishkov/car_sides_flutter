@@ -62,7 +62,7 @@ class _AnnotationScreenState extends State<AnnotationScreen> {
     Offset(59.3, 162.4),
     Offset(44.7, 149.7)
   ]; */
-  List<Annotation> annotations = [];
+  List<AnnotationModel> annotations = [];
 
   bool magnifierEnabled = false;
 
@@ -70,7 +70,8 @@ class _AnnotationScreenState extends State<AnnotationScreen> {
 
   Map<int, String> get classNames => DetectionModel.class_names;
 
-  Annotation get _currentAnnotation => annotations[_currentAnnotationIndex];
+  AnnotationModel get _currentAnnotation =>
+      annotations[_currentAnnotationIndex];
   int _currentAnnotationIndex = -1;
 
   double pointRadius = 2;
@@ -302,8 +303,8 @@ class _AnnotationScreenState extends State<AnnotationScreen> {
     Navigator.pop(
         context,
         annotations
-            .map(
-                (e) => Annotation(e.categoryId, e.scalePolygon(scaleX, scaleY)))
+            .map((e) =>
+                AnnotationModel(e.categoryId, e.scalePolygon(scaleX, scaleY)))
             .toList());
   }
 
@@ -351,7 +352,7 @@ class _AnnotationScreenState extends State<AnnotationScreen> {
       setState(() {
         _currentAnnotationIndex = annotations.length;
       });
-      annotations.add(Annotation(categoryId, Polygon.empty()));
+      annotations.add(AnnotationModel(categoryId, Polygon.empty()));
       return true;
     }
     return false;

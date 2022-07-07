@@ -2,7 +2,7 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 
-class ClassifierModel {
+class ClassificationModel {
   static List<String> class_names = [
     "Diagonal",
     "Back",
@@ -15,7 +15,7 @@ class ClassifierModel {
   final String imagePath;
   final bool isAsset;
 
-  ClassifierModel(this.predictions, this.imagePath, this.isAsset);
+  ClassificationModel(this.predictions, this.imagePath, this.isAsset);
 
   String get predictionLabel {
     return class_names[maxIndex];

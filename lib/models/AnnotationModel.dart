@@ -1,10 +1,10 @@
 import 'PolygonModel.dart';
 
-class Annotation {
+class AnnotationModel {
   int categoryId;
   Polygon polygon;
 
-  Annotation(this.categoryId, this.polygon);
+  AnnotationModel(this.categoryId, this.polygon);
 
   List<int> get segmentation {
     List<int> segmentation = [];

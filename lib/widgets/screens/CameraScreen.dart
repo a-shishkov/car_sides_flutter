@@ -2,12 +2,14 @@ import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:image/image.dart' as image_package;
 
-import '../../controllers/TensorflowController.dart';
 import '../../main.dart';
 import '../CameraPlain.dart';
 
 class CameraScreen extends StatefulWidget {
-  const CameraScreen({Key? key}) : super(key: key);
+  const CameraScreen({required this.onTakePicture, Key? key}) : super(key: key);
+
+  final Function(image_package.Image image, String imagePath, {bool isAsset})
+      onTakePicture;
 
   @override
   State<CameraScreen> createState() => _CameraScreenState();
@@ -107,7 +109,6 @@ class _CameraScreenState extends State<CameraScreen>
 
     var image = image_package.decodeImage(image_data)!;
 
-    TensorflowController.inference(image, file.path, isAsset: false)
-        .onError((error, stackTrace) => print("Error: $error"));
+    widget.onTakePicture(image, file.path, isAsset: true);
   }
 }

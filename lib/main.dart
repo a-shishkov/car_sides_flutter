@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'controllers/DetectionController.dart';
 
+import 'controllers/TensorflowWrapper.dart';
 import 'widgets/screens/CameraScreen.dart';
 import 'widgets/screens/DemoScreen.dart';
 import 'widgets/screens/SettingsScreen.dart';
@@ -104,7 +105,9 @@ class _MyHomePageState extends State<MyHomePage> {
       ),
       body: Container(
         child: Center(
-          child: isDemo ? DemoScreen() : CameraScreen(),
+          child: isDemo
+              ? DemoScreen(onTakePicture: inferenceWrapper)
+              : CameraScreen(onTakePicture: inferenceWrapper),
         ),
       ),
     );

@@ -24,7 +24,7 @@ class DetectionController {
   // 'scores': [instances of double],
   // 'classes': [instances of int]}
   static Future _serverDetection(image_package.Image image, String imagePath,
-      {List<Annotation>? annotations, bool isAsset = false}) async {
+      {List<AnnotationModel>? annotations, bool isAsset = false}) async {
     Map<String, dynamic> data = {
       'image': base64.encode(image.getBytes(format: image_package.Format.rgb)),
       'width': image.width,

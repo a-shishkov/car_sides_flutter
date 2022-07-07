@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:enum_to_string/enum_to_string.dart';
 
 import '../../controllers/DetectionController.dart';
-import '../../controllers/TensorflowController.dart';
+import '../../controllers/TensorflowWrapper.dart';
 import '../../main.dart';
 
 class SettingsScreen extends StatefulWidget {

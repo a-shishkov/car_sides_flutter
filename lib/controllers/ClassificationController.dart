@@ -33,7 +33,7 @@ class ClassifierController {
 
     interpreter.close();
 
-    var output = ClassifierModel(probability, imagePath, isAsset);
+    var output = ClassificationModel(probability, imagePath, isAsset);
 
     navigatorKey.currentState!.push(MaterialPageRoute(
         builder: (context) => ClassifierScreen(prediction: output)));

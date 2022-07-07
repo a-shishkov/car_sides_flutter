@@ -8,7 +8,7 @@ class ClassifierScreen extends StatelessWidget {
   const ClassifierScreen({required this.prediction, Key? key})
       : super(key: key);
 
-  final ClassifierModel prediction;
+  final ClassificationModel prediction;
 
   @override
   Widget build(BuildContext context) {
