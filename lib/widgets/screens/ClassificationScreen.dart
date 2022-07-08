@@ -4,8 +4,8 @@ import 'package:flutter/material.dart';
 
 import '../../models/ClassificationModel.dart';
 
-class ClassifierScreen extends StatelessWidget {
-  const ClassifierScreen({required this.prediction, Key? key})
+class ClassificationScreen extends StatelessWidget {
+  const ClassificationScreen({required this.prediction, Key? key})
       : super(key: key);
 
   final ClassificationModel prediction;

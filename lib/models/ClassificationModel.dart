@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 
 class ClassificationModel {
   static List<String> class_names = [
-    "Diagonal",
     "Back",
     "Front",
     "Left",
@@ -27,7 +26,7 @@ class ClassificationModel {
   }
 
   List<Widget> get textWidgets => List.generate(
-      5,
+      class_names.length,
       (index) => Text(
             "${class_names[index]}: ${predictions[index].toStringAsFixed(2)}",
             style: TextStyle(color: Colors.white),

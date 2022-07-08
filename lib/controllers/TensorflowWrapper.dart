@@ -15,7 +15,9 @@ Future inferenceWrapper(image_package.Image image, String imagePath,
           ModelType.values, prefs.getString("modelType") ?? "") ??
       ModelType.classifier;
 
+  // Run inference depending on the model type
   if (modelType == ModelType.classifier)
+    // Class sides classification
     ClassifierController.predict(image, imagePath, isAsset: isAsset);
   else
     DetectionController.detect(image, imagePath, isAsset: isAsset);
